@@ -31,8 +31,6 @@ static struct pseudodesc idt_pd = {
     sizeof(idt) - 1, (uintptr_t)idt
 };
 
-struct trapframe *switchu2k;
-struct trapframe switchk2u;
 /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
 void
 idt_init(void) {

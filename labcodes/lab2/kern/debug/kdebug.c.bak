@@ -305,21 +305,5 @@ print_stackframe(void) {
       *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
       *                   the calling funciton's ebp = ss:[ebp]
       */
-    uint32_t ebp = read_ebp();//get the value of ebp
-    uint32_t eip = read_eip();
-    uint32_t *arg;
-    int i,j;
-    for(i = 0; i<STACKFRAME_DEPTH && ebp!=0; i++)
-    {
-        cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);//输出ebp和eip
-        arg = (uint32_t *)ebp + 2;         //参数的首地址
-        for(j=0; j<4; j++)
-            cprintf("0x%08x ", arg[j]);    //输出每一参数     
-        cprintf("\n");
-        print_debuginfo(eip-1);              //print the C calling function name
-        eip = ((uint32_t *)ebp)[1];          //eip更新为返回地址
-        ebp = ((uint32_t *)ebp)[0];          //ebp寄存器存放的是调用者的ebp寄存器的值
-        //！！一定要先更新eip，否则ebp会改变
-    }
 }
 

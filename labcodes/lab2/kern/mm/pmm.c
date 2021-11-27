@@ -8,6 +8,7 @@
 #include <default_pmm.h>
 #include <sync.h>
 #include <error.h>
+#include <buddy.h>
 
 /* *
  * Task State Segment:
@@ -134,6 +135,8 @@ gdt_init(void) {
     ltr(GD_TSS);
 }
 
+//-------------------------------------------------------------------------//
+
 //init_pmm_manager - initialize a pmm_manager instance
 static void
 init_pmm_manager(void) {
@@ -141,6 +144,22 @@ init_pmm_manager(void) {
     cprintf("memory management: %s\n", pmm_manager->name);
     pmm_manager->init();
 }
+
+//-------------------------------------------------------------------------//
+
+//扩展练习注释掉上面一部分代码，取消注释下面一部分代码
+
+//-------------------------------------------------------------------------//
+
+/*static void
+init_pmm_manager(void) {
+    pmm_manager = &buddy_pmm_manager;
+    cprintf("memory management: %s\n", pmm_manager->name);
+    pmm_manager->init();
+}
+*/
+
+//-------------------------------------------------------------------------//
 
 //init_memmap - call pmm->init_memmap to build Page struct for free memory  
 static void
@@ -359,6 +378,31 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
     }
     return NULL;          // (8) return page table entry
 #endif
+    //获取页目录的物理地址
+    pde_t *pdep = &pgdir[PDX(la)];
+    //如果该条目不可用(not present)
+    if (!(*pdep & PTE_P)) 
+    {
+        struct Page *page;
+        //如果分配页面失败，或者不允许分配
+        if (!create || (page = alloc_page()) == NULL)
+            return NULL;
+        //设置该物理页面的引用次数为1
+        set_page_ref(page, 1);
+        //获取当前物理页面所管理的物理地址
+        uintptr_t pa = page2pa(page);
+        //清空该物理页面的数据。需要注意的是使用虚拟地址
+        memset(KADDR(pa), 0, PGSIZE);
+        //将新分配的页面设置为当前缺失的页目录条目中
+        *pdep = pa | PTE_U | PTE_W | PTE_P;
+        /*
+         *   PTE_P           0x001              // page table/directory entry flags bit : Present
+         *   PTE_W           0x002              // page table/directory entry flags bit : Writeable
+         *   PTE_U           0x004              // page table/directory entry flags bit : User can access
+         */
+    }
+    //返回二级页表项
+    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
@@ -404,6 +448,19 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
                                   //(6) flush tlb
     }
 #endif
+    //传入的页表条目是否可用
+    if (*ptep & PTE_P) 
+    {
+        //获取页面所对应的地址
+        struct Page *page = pte2page(*ptep);
+        //如果该页的引用次数在减1后为0，释放当前页
+        if (page_ref_dec(page) == 0)
+            free_page(page);
+        //清除二级页表条目
+        *ptep = 0;
+        //刷新TLB
+        tlb_invalidate(pgdir, la);
+    }
 }
 
 //page_remove - free an Page which is related linear address la and has an validated pte
