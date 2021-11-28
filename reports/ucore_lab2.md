@@ -7,6 +7,7 @@
 - [练习3](#练习3)  
 - [扩展练习](#扩展练习) 
 - [总结](#总结)
+    - [知识点](#知识点)
 
 ## 练习0
 >__填写已有实验__  
@@ -100,6 +101,10 @@ default_free_pages函数的作用是释放使用完毕的内存，并将空闲�
     }
     list_add_before(le, &(base->page_link));//将空闲块插找到的位置前面
 ```
+>>你的first fit算法是否有进一步的改进空间  
+
+有。  
+在释放内存的代码中，是通过遍历找到插入剩余内存块在链表中的位置，时间复制度为`O(n)`，在剩余空间块存在与链表中某个内存块连续的情况下，可以将该内存块直接并入连续的节点中，即只需要更新链表中某节点值，时间为常数。
 ## 练习2
 >__实现寻找虚拟地址对应的页表项（需要编程）__    
 >>通过设置页表和对应的页表项，可建立虚拟内存地址和物理内存地址的对应关系。其中的get_pte函数是设置页表项环节中的一个重要步骤。此函数找到一个虚地址对应的二级页表项的内核虚地址，如果此二级页表项不存在，则分配一个包含此项的二级页表。本练习需要补全get_pte函数 in kern/mm/pmm.c，实现其功能。  
@@ -325,3 +330,60 @@ init_pmm_manager(void)
 </div>
 
 ## 总结
+
+### 知识点
+1. __内存的数据结构__  
+```C
+struct e820map {      // 该数据结构保存于物理地址0x8000
+    int nr_map;       // map中的元素个数
+    struct {
+        uint64_t addr;    // 某块内存的起始地址
+        uint64_t size;    // 某块内存的大小
+        uint32_t type;    // 某块内存的属性。1标识可被使用内存块；2表示保留的内存块，不可映射。
+    } __attribute__((packed)) map[E820MAX];
+};
+```
+程序开始运行后，内存的分布信息会以以上结构体的形式储存在地址0x8000中。在page_init中，会从这个地址开始加载内存信息并处理后到pages。
+2. __页结构与链表__  
+页结构体如下：
+```C
+struct Page {
+    int ref;                        // page frame's reference counter
+    uint32_t flags;                 // array of flags that describe the status of the page frame
+    unsigned int property;          // the num of free block, used in first fit pm manager
+    list_entry_t page_link;         // free list link
+};
+```
+list_entry_t成员即链表的节点结构list_entry的别名，其结构如下：
+```C
+struct list_entry {
+    struct list_entry *prev, *next;
+};
+```
+list_entry结构为空闲列表结构free_area_t的成员：
+```C
+/* free_area_t - maintains a doubly linked list to record free (unused) pages */
+typedef struct {
+    list_entry_t free_list;         // the list header
+    unsigned int nr_free;           // # of free pages in this free list
+} free_area_t;
+```
+一开始困惑我的地方在于，如何根据链表找到物理页的位置，因为节点结构里没有指向物理页的成员。思考之后想到，根据结构里的内存连续性，页结构的page_link成员指向节点的实体，从节点的位置找到物理页的其它成员。   
+阅读代码找到的实现的函数：
+```C
+// convert list entry to page
+#define le2page(le, member)                 \
+    to_struct((le), struct Page, member)
+```
+追溯：
+```C
+#define to_struct(ptr, type, member)                               \
+    ((type *)((char *)(ptr) - offsetof(type, member)))
+```
+通过强制类型转换将list_entry转换为page。  
+
+3. __地址转换__  
+课堂上的内容讲到了虚拟地址和物理地址，但是没有提到线性地址，定义如下：
+>线性地址：指虚拟地址到物理地址变换的中间层，是处理器可寻址的内存空间（称为线性地址空间）中的地址。程序代码会产生逻辑地址，或者说段中的偏移地址，加上相应段基址就成了一个线性地址。**如果启用了分页机制，那么线性地址可以再经过变换产生物理地址。若是没有采用分页机制，那么线性地址就是物理地址。**    
+
+ 线性地址转换为物理地址的过程，已经在[练习2](#练习2)中描述。
