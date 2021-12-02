@@ -299,9 +299,120 @@ void buddy2_new(int size) {
     return;
 }
 ```
-内存分配方法是通过深度优先搜索找到合适的内存块大小，并将其lonest标记为0，并返回其索引。在返回前要更新其路径上的节点的longest，因为其部分已经被分配。代码见`buddy2_alloc() in buddy.c`。
-内存释放是根据需要释放的节点的索引，还原其longest，并通过回溯更新路径上的节点的longest，代码见`buddy_free_pages() in buddy.c`。
-然后编写`buddy_check`函数进行测试。  
+内存分配方法是通过深度优先搜索找到合适的内存块大小，并将其lonest标记为0，并返回其索引。在返回前要更新其路径上的节点的longest，因为其部分已经被分配。代码见`buddy2_alloc() in buddy.c`。  
+```C
+//内存分配
+int buddy2_alloc(struct buddy2* self, int size) 
+{
+    unsigned index = 0;
+    unsigned node_size;
+    unsigned offset = 0;
+
+    if (self==NULL)
+        return -1;
+    if (size <= 0)//分配不合理
+        size = 1;
+    else if (!IS_POWER_OF_2(size))//不为2的幂时，取比size更大的2的n次幂
+        size = fixsize(size);
+    if (self[index].longest < size)//可分配内存不足
+        return -1;
+    for(node_size = self->size; node_size != size; node_size /= 2 ) 
+    {
+        if(self[LEFT_LEAF(index)].longest >= size)
+        {
+            if(self[RIGHT_LEAF(index)].longest>=size)
+            {
+                index=self[LEFT_LEAF(index)].longest <= self[RIGHT_LEAF(index)].longest? LEFT_LEAF(index):RIGHT_LEAF(index);
+                //找到两个相符合的节点中内存较小的结点
+            }
+            else
+            {
+                index=LEFT_LEAF(index);
+            }  
+        }
+        else
+            index = RIGHT_LEAF(index);
+    }
+
+    self[index].longest = 0;//标记节点为已使用
+    offset = (index + 1) * node_size - self->size;
+    while (index) {
+        index = PARENT(index);
+        self[index].longest = 
+        MAX(self[LEFT_LEAF(index)].longest, self[RIGHT_LEAF(index)].longest);
+    }
+    //向上刷新，修改先祖结点的数值
+    return offset;
+}
+```
+内存释放是根据需要释放的节点的索引，还原其longest，并通过回溯更新路径上的节点的longest，代码见`buddy_free_pages() in buddy.c`。   
+```C
+void buddy_free_pages(struct Page* base, size_t n) 
+{
+    unsigned node_size, index = 0;
+    unsigned left_longest, right_longest;
+    struct buddy2* self=root;
+
+    list_entry_t *le=list_next(&free_list);
+    int i=0;
+    for(i=0;i<nr_block;i++)//找到块
+    {
+        if(rec[i].base==base)
+            break;
+    }
+    int offset=rec[i].offset;
+    int pos=i;//暂存i
+    i=0;
+    while(i<offset)
+    {
+        le=list_next(le);
+        i++;
+    }
+    int allocpages;
+    if(!IS_POWER_OF_2(n))
+        allocpages=fixsize(n);
+    else
+    {
+        allocpages=n;
+    }
+    assert(self && offset >= 0 && offset < self->size);//是否合法
+    node_size = 1;
+    index = offset + self->size - 1;
+    nr_free+=allocpages;//更新空闲页的数量
+    struct Page* p;
+    self[index].longest = allocpages;
+    for(i=0;i<allocpages;i++)//回收已分配的页
+    {
+        p=le2page(le,page_link);
+        p->flags=0;
+        p->property=1;
+        SetPageProperty(p);
+        le=list_next(le);
+    }
+    while (index) {//向上合并，修改先祖节点的记录值
+        index = PARENT(index);
+        node_size *= 2;
+
+        left_longest = self[LEFT_LEAF(index)].longest;
+        right_longest = self[RIGHT_LEAF(index)].longest;
+
+        if (left_longest + right_longest == node_size) 
+            self[index].longest = node_size;
+        else
+            self[index].longest = MAX(left_longest, right_longest);
+    }
+    for(i=pos;i<nr_block-1;i++)//清除此次的分配记录
+    {
+        rec[i]=rec[i+1];
+    }
+    nr_block--;//更新分配块数的值
+}
+```
+然后编写`buddy_check`函数进行测试,测试的数据参考[伙伴分配器的一个极简实现](https://coolshell.cn/articles/10427.html)中的示例。      
+<div align="center">
+<img src="./img/buddy.jpg" alt="check" width="500"/>
+</div>
+
 最后添加如下代码：
 ```C
 const struct pmm_manager buddy_pmm_manager = {
@@ -354,13 +465,16 @@ struct Page {
     list_entry_t page_link;         // free list link
 };
 ```
+页大小`PGSIZE`=4096   property是空闲块大小---地址连续的空闲页的个数。  
+只有空闲块的头一页用到page_link，是把多个连续内存空闲块链接在一起的双向链表指针
+连续内存空闲块利用这个页的成员变量page_link来链接比它地址小和大的其他连续内存空闲块。  
 list_entry_t成员即链表的节点结构list_entry的别名，其结构如下：
 ```C
 struct list_entry {
     struct list_entry *prev, *next;
 };
 ```
-list_entry结构为空闲列表结构free_area_t的成员：
+list_entry结构为空闲列表头节点结构free_area_t的成员：
 ```C
 /* free_area_t - maintains a doubly linked list to record free (unused) pages */
 typedef struct {
@@ -368,6 +482,7 @@ typedef struct {
     unsigned int nr_free;           // # of free pages in this free list
 } free_area_t;
 ```
+只是一个头节点，nr_free是一共有多少个空闲页。    
 一开始困惑我的地方在于，如何根据链表找到物理页的位置，因为节点结构里没有指向物理页的成员。思考之后想到，根据结构里的内存连续性，页结构的page_link成员指向节点的实体，从节点的位置找到物理页的其它成员。   
 阅读代码找到的实现的函数：
 ```C
@@ -387,3 +502,6 @@ typedef struct {
 >线性地址：指虚拟地址到物理地址变换的中间层，是处理器可寻址的内存空间（称为线性地址空间）中的地址。程序代码会产生逻辑地址，或者说段中的偏移地址，加上相应段基址就成了一个线性地址。**如果启用了分页机制，那么线性地址可以再经过变换产生物理地址。若是没有采用分页机制，那么线性地址就是物理地址。**    
 
  线性地址转换为物理地址的过程，已经在[练习2](#练习2)中描述。
+
+### 思考
+做实验我习惯一开始就看代码写代码，写完一大部分后才发现我对ucore内存机制的理解是错误的，比如几个数据结构的作用。我转而去阅读实验说明文档后列出的知识点，发现很多东西都已经写明，看完后再去理解代码就会非常容易。不能看到一知半解算了，一定要完全搞清楚。
