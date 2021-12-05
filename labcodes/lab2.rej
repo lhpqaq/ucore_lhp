@@ -1,0 +1,156 @@
+*** /dev/null
+--- /dev/null
+***************
+*** 1
+- PROJ	:= challenge
+--- 1 -----
++ PROJ	:= 5
+***************
+*** 0
+--- 61 -----
++ GDB		:= $(GCCPREFIX)gdb
+***************
+*** 0
+--- 81,83 -----
++ TAR		:= tar
++ ZIP		:= gzip
++ 
+***************
+*** 125
+- 			   kern/mm/
+--- 129,131 -----
++ 			   kern/mm/ \
++ 			   kern/libs/ \
++ 			   kern/sync/
+***************
+*** 132
+- 			   kern/mm
+--- 138,139 -----
++ 			   kern/mm \
++ 			   kern/sync
+***************
+*** 0
+--- 160,173 -----
++ 
++ # create kernel_nopage target
++ kernel_nopage = $(call totarget,kernel_nopage)
++ 
++ $(kernel_nopage): tools/kernel_nopage.ld
++ 
++ $(kernel_nopage): $(KOBJS)
++ 	@echo + ld $@
++ 	$(V)$(LD) $(LDFLAGS) -T tools/kernel_nopage.ld -o $@ $(KOBJS)
++ 	@$(OBJDUMP) -S $@ > $(call asmfile,kernel_nopage)
++ 	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel_nopage)
++ 
++ $(call create_target,kernel)
++ 
+***************
+*** 161
+- $(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
+--- 182 -----
++ $(bootblock): $(call toobj,boot/bootasm.S) $(call toobj,$(bootfiles)) | $(call totarget,sign)
+***************
+*** 163
+- 	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
+--- 184 -----
++ 	$(V)$(LD) $(LDFLAGS) -N -T tools/boot.ld $^ -o $(call toobj,bootblock)
+***************
+*** 181
+- $(UCOREIMG): $(kernel) $(bootblock)
+--- 202 -----
++ $(UCOREIMG): $(kernel) $(bootblock) $(kernel_nopage)
+***************
+*** 192,193
+- IGNORE_ALLDEPS	= clean \
+- 				  dist-clean \
+--- 213,215 -----
++ IGNORE_ALLDEPS	= gdb \
++ 				  clean \
++ 				  distclean \
+***************
+*** 0
+--- 231,232 -----
++ QEMUOPTS = -hda $(UCOREIMG)
++ 
+***************
+*** 211
+- 	$(V)$(QEMU)  -no-reboot -monitor stdio -hda $< -serial null
+--- 235 -----
++ 	$(V)$(QEMU)  -no-reboot -monitor stdio $(QEMUOPTS) -serial null
+***************
+*** 213,215
+- 	$(V)$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
+- log: $(UCOREIMG)
+- 	$(V)$(QEMU) -no-reboot -d int,cpu_reset  -D q.log -parallel stdio -hda $< -serial null
+--- 237,238 -----
++ 	$(V)$(QEMU)  -no-reboot -parallel stdio $(QEMUOPTS) -serial null
++ 
+***************
+*** 217,218
+- 	$(V)$(QEMU)   -no-reboot -serial mon:stdio -hda $< -nographic
+- TERMINAL        :=gnome-terminal
+--- 240,243 -----
++ 	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
++ 
++ TERMINAL := gnome-terminal
++ 
+***************
+*** 220
+- 	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null &
+--- 245 -----
++ 	$(V)$(QEMU) -S -s -parallel stdio $(QEMUOPTS) -serial null &
+***************
+*** 222,223
+- 	$(V)$(TERMINAL) -e "gdb -q -tui -x tools/gdbinit"
+- 	
+--- 247,248 -----
++ 	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
++ 
+***************
+*** 225
+- 	$(V)$(QEMU) -S -s -serial mon:stdio -hda $< -nographic &
+--- 250 -----
++ 	$(V)$(QEMU) -S -s -serial mon:stdio $(QEMUOPTS) -nographic &
+***************
+*** 227
+- 	$(V)$(TERMINAL) -e "gdb -q -x tools/gdbinit"
+--- 252 -----
++ 	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
+***************
+*** 233
+- HANDIN			:= proj$(PROJ)-handin.tar.gz
+--- 258 -----
++ HANDIN			:= lab2-handin.tar.gz
+***************
+*** 249
+- .PHONY: clean dist-clean handin packall tags
+--- 274 -----
++ .PHONY: clean distclean handin tags
+***************
+*** 252,258
+- 	-$(RM) -r $(OBJDIR) $(BINDIR)
+- 
+- dist-clean: clean
+- 	-$(RM) $(HANDIN)
+- 
+- handin: packall
+- 	@echo Please visit http://learn.tsinghua.edu.cn and upload $(HANDIN). Thanks!
+--- 277 -----
++ 	$(V)$(RM) -r $(OBJDIR) $(BINDIR)
+***************
+*** 260,262
+- packall: clean
+- 	@$(RM) -f $(HANDIN)
+- 	@tar -czf $(HANDIN) `find . -type f -o -type d | grep -v '^\.*$$' | grep -vF '$(HANDIN)'`
+--- 279,280 -----
++ distclean: clean
++ 	$(V)$(RM) $(HANDIN)
+***************
+*** 0
+--- 282,286 -----
++ handin: distclean
++ 	$(V)$(TAR) -cf - `find . -type f -o -type d | grep -v '^\.$$' | grep -v '/CVS/' \
++ 					| grep -v '/\.git/' | grep -v '/\.svn/' | grep -v "$(HANDIN)"` \
++ 					| $(ZIP) > $(HANDIN)
++ 					

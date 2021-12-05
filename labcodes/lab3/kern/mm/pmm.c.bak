@@ -442,19 +442,6 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
                                   //(6) flush tlb
     }
 #endif
-    //传入的页表条目是否可用
-    if (*ptep & PTE_P) 
-    {
-        //获取页面所对应的地址
-        struct Page *page = pte2page(*ptep);
-        //如果该页的引用次数在减1后为0，释放当前页
-        if (page_ref_dec(page) == 0)
-            free_page(page);
-        //清除二级页表条目
-        *ptep = 0;
-        //刷新TLB
-        tlb_invalidate(pgdir, la);
-    }
 }
 
 //page_remove - free an Page which is related linear address la and has an validated pte

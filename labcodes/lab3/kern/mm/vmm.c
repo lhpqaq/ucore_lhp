@@ -396,6 +396,38 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         }
    }
 #endif
+    //查找当前虚拟地址所对应的页表项
+    if((ptep = get_pte(mm->pgdir, addr, 1)) == NULL) 
+    {
+        cprintf("get_pte in do_pgfault failed\n");
+        goto failed;
+    }
+    //如果这个页表项所对应的物理页不存在，则
+    if (*ptep == 0) 
+    {
+        //分配一块物理页，并设置页表项
+        if(pgdir_alloc_page(mm->pgdir, addr, perm) == NULL) 
+        {
+            cprintf("pgdir_alloc_page in do_pgfault failed\n");
+            goto failed;
+        }
+    }
+    else { //物理页存在，但不在内存中
+        if(swap_init_ok) { //swap_init已完成
+            struct Page *page=NULL;//根据 mm 结构和 addr 地址，尝试将硬盘中的内容换入至 page 中
+            if ((ret = swap_in(mm, addr, &page)) != 0) {//分配一个内存页
+                cprintf("swap_in in do_pgfault failed\n");
+                goto failed;
+            }    
+            page_insert(mm->pgdir, page, addr, perm);//建立虚拟地址和物理地址之间的对应关系
+            swap_map_swappable(mm, addr, page, 1);//将此页面设置为可交换的
+            page->pra_vaddr = addr;
+        }
+        else {
+            cprintf("no swap_init_ok but ptep is %x, failed\n",*ptep);
+            goto failed;
+        }
+   }
    ret = 0;
 failed:
     return ret;

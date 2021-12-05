@@ -1,0 +1,4218 @@
+diff -ruN lab1/boot/bootasm.S lab2/boot/bootasm.S
+--- lab1/boot/bootasm.S	2021-11-08 18:05:44.000000000 +0600
++++ lab2/boot/bootasm.S	2021-11-08 18:05:44.000000000 +0600
+@@ -8,6 +8,7 @@
+ .set PROT_MODE_CSEG,        0x8                     # kernel code segment selector
+ .set PROT_MODE_DSEG,        0x10                    # kernel data segment selector
+ .set CR0_PE_ON,             0x1                     # protected mode enable flag
++.set SMAP,                  0x534d4150
+ 
+ # start address should be 0:7c00, in real mode, the beginning address of the running bootloader
+ .globl start
+@@ -42,6 +43,25 @@
+     movb $0xdf, %al                                 # 0xdf -> port 0x60
+     outb %al, $0x60                                 # 0xdf = 11011111, means set P2's A20 bit(the 1 bit) to 1
+ 
++probe_memory:
++    movl $0, 0x8000
++    xorl %ebx, %ebx
++    movw $0x8004, %di
++start_probe:
++    movl $0xE820, %eax
++    movl $20, %ecx
++    movl $SMAP, %edx
++    int $0x15
++    jnc cont
++    movw $12345, 0x8000
++    jmp finish_probe
++cont:
++    addw $20, %di
++    incl 0x8000
++    cmpl $0, %ebx
++    jnz start_probe
++finish_probe:
++
+     # Switch from real to protected mode, using a bootstrap GDT
+     # and segment translation that makes virtual addresses
+     # identical to physical addresses, so that the
+@@ -74,6 +94,7 @@
+ spin:
+     jmp spin
+ 
++.data
+ # Bootstrap GDT
+ .p2align 2                                          # force 4 byte alignment
+ gdt:
+diff -ruN lab1/.check_output.log lab2/.check_output.log
+--- lab1/.check_output.log	2021-11-21 12:20:15.000000000 +0600
++++ lab2/.check_output.log	1970-01-01 06:00:00.000000000 +0600
+@@ -1,71 +0,0 @@
+-c[?7l[2J[0mSeaBIOS (version 1.13.0-1ubuntu1.1)
+-
+-
+-iPXE (http://ipxe.org) 00:03.0 CA00 PCI2.10 PnP PMM+07F8CA10+07ECCA10 CA00
+-Press Ctrl-B to configure iPXE (PCI 00:03.0)...                                                                               
+-
+-
+-Booting from Hard Disk..(THU.CST) os is loading ...
+-
+-Special kernel symbols:
+-  entry  0x00100000 (phys)
+-  etext  0x00103838 (phys)
+-  edata  0x00110a16 (phys)
+-  end    0x00111d80 (phys)
+-Kernel executable memory footprint: 72KB
+-ebp:0x00007b28 eip:0x00100ac2 args:0x00010094 0x00010094 0x00007b58 0x0010009b 
+-    kern/debug/kdebug.c:306: print_stackframe+25
+-ebp:0x00007b38 eip:0x00100dc4 args:0x00000000 0x00000000 0x00000000 0x00007ba8 
+-    kern/debug/kmonitor.c:125: mon_backtrace+14
+-ebp:0x00007b58 eip:0x0010009b args:0x00000000 0x00007b80 0xffff0000 0x00007b84 
+-    kern/init/init.c:48: grade_backtrace2+37
+-ebp:0x00007b78 eip:0x001000c9 args:0x00000000 0xffff0000 0x00007ba4 0x00000029 
+-    kern/init/init.c:53: grade_backtrace1+42
+-ebp:0x00007b98 eip:0x001000ec args:0x00000000 0x00100000 0xffff0000 0x0000001d 
+-    kern/init/init.c:58: grade_backtrace0+27
+-ebp:0x00007bb8 eip:0x00100116 args:0x0010385c 0x00103840 0x0000136a 0x00000000 
+-    kern/init/init.c:63: grade_backtrace+38
+-ebp:0x00007be8 eip:0x00100055 args:0x00000000 0x00000000 0x00000000 0x00007c4f 
+-    kern/init/init.c:28: kern_init+84
+-ebp:0x00007bf8 eip:0x00007d74 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8 
+-    <unknow>: -- 0x00007d73 --
+-++ setup timer interrupts
+-0: @ring 0
+-0:  cs = 8
+-0:  ds = 10
+-0:  es = 10
+-0:  ss = 10
+-+++ switch to  user  mode +++
+-1: @ring 3
+-1:  cs = 1b
+-1:  ds = 23
+-1:  es = 23
+-1:  ss = 23
+-+++ switch to kernel mode +++
+-2: @ring 0
+-2:  cs = 8
+-2:  ds = 10
+-2:  es = 10
+-2:  ss = 10
+-100 ticks
+-End of Test.
+-kernel panic at kern/trap/trap.c:18:
+-    EOT: kernel seems ok.
+-stack trackback:
+-ebp:0x00007ac0 eip:0x00100ac2 args:0x00103908 0x00007b04 0x00000012 0xffffffff 
+-    kern/debug/kdebug.c:306: print_stackframe+25
+-ebp:0x00007af0 eip:0x0010046b args:0x00103bce 0x00000012 0x00103bb8 0x00010094 
+-    kern/debug/panic.c:27: __panic+107
+-ebp:0x00007b10 eip:0x00101945 args:0x001038a7 0x00007b7c 0x00007b40 0x001020f8 
+-    kern/trap/trap.c:0: print_ticks+69
+-ebp:0x00007b50 eip:0x00101e22 args:0x00007b7c 0x0000000c 0x001038c7 0x00000000 
+-    kern/trap/trap.c:167: trap_dispatch+166
+-ebp:0x00007b70 eip:0x001020f8 args:0x00007b7c 0x00000000 0x00010094 0x00007be8 
+-    kern/trap/trap.c:240: trap+20
+-ebp:0x00007be8 eip:0x00102b83 args:0x00000000 0x00000000 0x00000000 0x00007c4f 
+-    kern/trap/trapentry.S:24: <unknown>+0
+-ebp:0x00007bf8 eip:0x00007d74 args:0xc031fcfa 0xc08ed88e 0x64e4d08e 0xfa7502a8 
+-    <unknow>: -- 0x00007d73 --
+-Welcome to the kernel debug monitor!!
+-Type 'help' for a list of commands.
+-K> 
+\ 文件尾没有换行符
+diff -ruN lab1/kern/debug/kdebug.c lab2/kern/debug/kdebug.c
+--- lab1/kern/debug/kdebug.c	2021-11-20 13:33:04.000000000 +0600
++++ lab2/kern/debug/kdebug.c	2021-11-08 18:05:44.000000000 +0600
+@@ -3,7 +3,10 @@
+ #include <stab.h>
+ #include <stdio.h>
+ #include <string.h>
++#include <sync.h>
+ #include <kdebug.h>
++#include <kmonitor.h>
++#include <assert.h>
+ 
+ #define STACKFRAME_DEPTH 20
+ 
+@@ -290,33 +293,17 @@
+  * */
+ void
+ print_stackframe(void) {
+-    /* LAB1 YOUR CODE : STEP 1 */
+-    /* (1) call read_ebp() to get the value of ebp. the type is (uint32_t);
+-    * (2) call read_eip() to get the value of eip. the type is (uint32_t);
+-    * (3) from 0 .. STACKFRAME_DEPTH
+-    *    (3.1) printf value of ebp, eip
+-    *    (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]
+-    *    (3.3) cprintf("\n");
+-    *    (3.4) call print_debuginfo(eip-1) to print the C calling function name and line number, etc.
+-    *    (3.5) popup a calling stackframe
+-    *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
+-    *                   the calling funciton's ebp = ss:[ebp]
+-    */
+-    uint32_t ebp = read_ebp();//get the value of ebp
+-    uint32_t eip = read_eip();
+-    uint32_t *arg;
+-    int i,j;
+-    for(i = 0; i<STACKFRAME_DEPTH && ebp!=0; i++)
+-    {
+-        cprintf("ebp:0x%08x eip:0x%08x args:", ebp, eip);//输出ebp和eip
+-        arg = (uint32_t *)ebp + 2;         //参数的首地址
+-        for(j=0; j<4; j++)
+-            cprintf("0x%08x ", arg[j]);    //输出每一参数     
+-        cprintf("\n");
+-        print_debuginfo(eip-1);              //print the C calling function name
+-        eip = ((uint32_t *)ebp)[1];          //eip更新为返回地址
+-        ebp = ((uint32_t *)ebp)[0];          //ebp寄存器存放的是调用者的ebp寄存器的值
+-        //！！一定要先更新eip，否则ebp会改变
+-    }
++     /* LAB1 YOUR CODE : STEP 1 */
++     /* (1) call read_ebp() to get the value of ebp. the type is (uint32_t);
++      * (2) call read_eip() to get the value of eip. the type is (uint32_t);
++      * (3) from 0 .. STACKFRAME_DEPTH
++      *    (3.1) printf value of ebp, eip
++      *    (3.2) (uint32_t)calling arguments [0..4] = the contents in address (uint32_t)ebp +2 [0..4]
++      *    (3.3) cprintf("\n");
++      *    (3.4) call print_debuginfo(eip-1) to print the C calling function name and line number, etc.
++      *    (3.5) popup a calling stackframe
++      *           NOTICE: the calling funciton's return addr eip  = ss:[ebp+4]
++      *                   the calling funciton's ebp = ss:[ebp]
++      */
+ }
+ 
+diff -ruN lab1/kern/debug/kdebug.h lab2/kern/debug/kdebug.h
+--- lab1/kern/debug/kdebug.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/debug/kdebug.h	2021-11-08 18:05:44.000000000 +0600
+@@ -2,6 +2,7 @@
+ #define __KERN_DEBUG_KDEBUG_H__
+ 
+ #include <defs.h>
++#include <trap.h>
+ 
+ void print_kerninfo(void);
+ void print_stackframe(void);
+diff -ruN lab1/kern/debug/kmonitor.c lab2/kern/debug/kmonitor.c
+--- lab1/kern/debug/kmonitor.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/debug/kmonitor.c	2021-11-08 18:05:44.000000000 +0600
+@@ -1,5 +1,6 @@
+ #include <stdio.h>
+ #include <string.h>
++#include <mmu.h>
+ #include <trap.h>
+ #include <kmonitor.h>
+ #include <kdebug.h>
+@@ -22,6 +23,9 @@
+     {"backtrace", "Print backtrace of stack frame.", mon_backtrace},
+ };
+ 
++/* return if kernel is panic, in kern/debug/panic.c */
++bool is_kernel_panic(void);
++
+ #define NCOMMANDS (sizeof(commands)/sizeof(struct command))
+ 
+ /***** Kernel monitor command interpreter *****/
+diff -ruN lab1/kern/debug/kmonitor.h lab2/kern/debug/kmonitor.h
+--- lab1/kern/debug/kmonitor.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/debug/kmonitor.h	2021-11-08 18:05:44.000000000 +0600
+@@ -8,6 +8,12 @@
+ int mon_help(int argc, char **argv, struct trapframe *tf);
+ int mon_kerninfo(int argc, char **argv, struct trapframe *tf);
+ int mon_backtrace(int argc, char **argv, struct trapframe *tf);
++int mon_continue(int argc, char **argv, struct trapframe *tf);
++int mon_step(int argc, char **argv, struct trapframe *tf);
++int mon_breakpoint(int argc, char **argv, struct trapframe *tf);
++int mon_watchpoint(int argc, char **argv, struct trapframe *tf);
++int mon_delete_dr(int argc, char **argv, struct trapframe *tf);
++int mon_list_dr(int argc, char **argv, struct trapframe *tf);
+ 
+ #endif /* !__KERN_DEBUG_MONITOR_H__ */
+ 
+diff -ruN lab1/kern/driver/console.c lab2/kern/driver/console.c
+--- lab1/kern/driver/console.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/driver/console.c	2021-11-08 18:05:44.000000000 +0600
+@@ -5,6 +5,8 @@
+ #include <kbdreg.h>
+ #include <picirq.h>
+ #include <trap.h>
++#include <memlayout.h>
++#include <sync.h>
+ 
+ /* stupid I/O delay routine necessitated by historical PC design flaws */
+ static void
+@@ -52,41 +54,30 @@
+ static uint16_t crt_pos;
+ static uint16_t addr_6845;
+ 
+-// 显示器初始化，CGA 是 Color Graphics Adapter 的缩写
+-// CGA显存按照下面的方式映射：
+-//   -- 0xB0000 - 0xB7FFF 单色字符模式
+-//   -- 0xB8000 - 0xBFFFF 彩色字符模式及 CGA 兼容图形模式
+-// 6845芯片是IBM PC中的视频控制器
+-// CPU通过IO地址0x3B4-0x3B5来驱动6845控制单色显示，通过IO地址0x3D4-0x3D5来控制彩色显示。
+-//    -- 数据寄存器 映射 到 端口 0x3D5或0x3B5 
+-//    -- 索引寄存器 0x3D4或0x3B4,决定在数据寄存器中的数据表示什么。
+-
+ /* TEXT-mode CGA/VGA display output */
++
+ static void
+ cga_init(void) {
+-    volatile uint16_t *cp = (uint16_t *)CGA_BUF;   //CGA_BUF: 0xB8000 (彩色显示的显存物理基址)
+-    uint16_t was = *cp;                                            //保存当前显存0xB8000处的值
+-    *cp = (uint16_t) 0xA55A;                                   // 给这个地址随便写个值，看看能否再读出同样的值
+-    if (*cp != 0xA55A) {                                            // 如果读不出来，说明没有这块显存，即是单显配置
+-        cp = (uint16_t*)MONO_BUF;                         //设置为单显的显存基址 MONO_BUF： 0xB0000
+-        addr_6845 = MONO_BASE;                           //设置为单显控制的IO地址，MONO_BASE: 0x3B4
+-    } else {                                                                // 如果读出来了，有这块显存，即是彩显配置
+-        *cp = was;                                                      //还原原来显存位置的值
+-        addr_6845 = CGA_BASE;                               // 设置为彩显控制的IO地址，CGA_BASE: 0x3D4 
++    volatile uint16_t *cp = (uint16_t *)(CGA_BUF + KERNBASE);
++    uint16_t was = *cp;
++    *cp = (uint16_t) 0xA55A;
++    if (*cp != 0xA55A) {
++        cp = (uint16_t*)(MONO_BUF + KERNBASE);
++        addr_6845 = MONO_BASE;
++    } else {
++        *cp = was;
++        addr_6845 = CGA_BASE;
+     }
+ 
+     // Extract cursor location
+-    // 6845索引寄存器的index 0x0E（及十进制的14）== 光标位置(高位)
+-    // 6845索引寄存器的index 0x0F（及十进制的15）== 光标位置(低位)
+-    // 6845 reg 15 : Cursor Address (Low Byte)
+     uint32_t pos;
+-    outb(addr_6845, 14);                                        
+-    pos = inb(addr_6845 + 1) << 8;                       //读出了光标位置(高位)
++    outb(addr_6845, 14);
++    pos = inb(addr_6845 + 1) << 8;
+     outb(addr_6845, 15);
+-    pos |= inb(addr_6845 + 1);                             //读出了光标位置(低位)
++    pos |= inb(addr_6845 + 1);
+ 
+-    crt_buf = (uint16_t*) cp;                                  //crt_buf是CGA显存起始地址
+-    crt_pos = pos;                                                  //crt_pos是CGA当前光标位置
++    crt_buf = (uint16_t*) cp;
++    crt_pos = pos;
+ }
+ 
+ static bool serial_exists = 0;
+@@ -434,9 +425,14 @@
+ /* cons_putc - print a single character @c to console devices */
+ void
+ cons_putc(int c) {
+-    lpt_putc(c);
+-    cga_putc(c);
+-    serial_putc(c);
++    bool intr_flag;
++    local_intr_save(intr_flag);
++    {
++        lpt_putc(c);
++        cga_putc(c);
++        serial_putc(c);
++    }
++    local_intr_restore(intr_flag);
+ }
+ 
+ /* *
+@@ -445,22 +441,25 @@
+  * */
+ int
+ cons_getc(void) {
+-    int c;
+-
+-    // poll for any pending input characters,
+-    // so that this function works even when interrupts are disabled
+-    // (e.g., when called from the kernel monitor).
+-    serial_intr();
+-    kbd_intr();
+-
+-    // grab the next character from the input buffer.
+-    if (cons.rpos != cons.wpos) {
+-        c = cons.buf[cons.rpos ++];
+-        if (cons.rpos == CONSBUFSIZE) {
+-            cons.rpos = 0;
++    int c = 0;
++    bool intr_flag;
++    local_intr_save(intr_flag);
++    {
++        // poll for any pending input characters,
++        // so that this function works even when interrupts are disabled
++        // (e.g., when called from the kernel monitor).
++        serial_intr();
++        kbd_intr();
++
++        // grab the next character from the input buffer.
++        if (cons.rpos != cons.wpos) {
++            c = cons.buf[cons.rpos ++];
++            if (cons.rpos == CONSBUFSIZE) {
++                cons.rpos = 0;
++            }
+         }
+-        return c;
+     }
+-    return 0;
++    local_intr_restore(intr_flag);
++    return c;
+ }
+ 
+diff -ruN lab1/kern/init/entry.S lab2/kern/init/entry.S
+--- lab1/kern/init/entry.S	1970-01-01 06:00:00.000000000 +0600
++++ lab2/kern/init/entry.S	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,70 @@
++#include <mmu.h>
++#include <memlayout.h>
++
++#define REALLOC(x) (x - KERNBASE)
++
++.text
++.globl kern_entry
++kern_entry:
++    # load pa of boot pgdir
++    movl $REALLOC(__boot_pgdir), %eax
++    movl %eax, %cr3
++
++    # enable paging
++    movl %cr0, %eax
++    orl $(CR0_PE | CR0_PG | CR0_AM | CR0_WP | CR0_NE | CR0_TS | CR0_EM | CR0_MP), %eax
++    andl $~(CR0_TS | CR0_EM), %eax
++    movl %eax, %cr0
++
++    # update eip
++    # now, eip = 0x1.....
++    leal next, %eax
++    # set eip = KERNBASE + 0x1.....
++    jmp *%eax
++next:
++
++    # unmap va 0 ~ 4M, it's temporary mapping
++    xorl %eax, %eax
++    movl %eax, __boot_pgdir
++
++    # set ebp, esp
++    movl $0x0, %ebp
++    # the kernel stack region is from bootstack -- bootstacktop,
++    # the kernel stack size is KSTACKSIZE (8KB)defined in memlayout.h
++    movl $bootstacktop, %esp
++    # now kernel stack is ready , call the first C function
++    call kern_init
++
++# should never get here
++spin:
++    jmp spin
++
++.data
++.align PGSIZE
++    .globl bootstack
++bootstack:
++    .space KSTACKSIZE
++    .globl bootstacktop
++bootstacktop:
++
++# kernel builtin pgdir
++# an initial page directory (Page Directory Table, PDT)
++# These page directory table and page table can be reused!
++.section .data.pgdir
++.align PGSIZE
++__boot_pgdir:
++.globl __boot_pgdir
++    # map va 0 ~ 4M to pa 0 ~ 4M (temporary)
++    .long REALLOC(__boot_pt1) + (PTE_P | PTE_U | PTE_W)
++    .space (KERNBASE >> PGSHIFT >> 10 << 2) - (. - __boot_pgdir) # pad to PDE of KERNBASE
++    # map va KERNBASE + (0 ~ 4M) to pa 0 ~ 4M
++    .long REALLOC(__boot_pt1) + (PTE_P | PTE_U | PTE_W)
++    .space PGSIZE - (. - __boot_pgdir) # pad to PGSIZE
++
++.set i, 0
++__boot_pt1:
++.rept 1024
++    .long i * PGSIZE + (PTE_P | PTE_W)
++    .set i, i + 1
++.endr
++
+diff -ruN lab1/kern/init/init.c lab2/kern/init/init.c
+--- lab1/kern/init/init.c	2021-11-20 18:15:13.000000000 +0600
++++ lab2/kern/init/init.c	2021-11-08 18:05:44.000000000 +0600
+@@ -9,6 +9,7 @@
+ #include <intr.h>
+ #include <pmm.h>
+ #include <kmonitor.h>
++
+ int kern_init(void) __attribute__((noreturn));
+ void grade_backtrace(void);
+ static void lab1_switch_test(void);
+@@ -37,7 +38,7 @@
+ 
+     //LAB1: CAHLLENGE 1 If you try to do it, uncomment lab1_switch_test()
+     // user/kernel mode switch test
+-    lab1_switch_test();
++    //lab1_switch_test();
+ 
+     /* do nothing */
+     while (1);
+@@ -81,25 +82,14 @@
+     round ++;
+ }
+ 
+-static void lab1_switch_to_user(void) {
++static void
++lab1_switch_to_user(void) {
+     //LAB1 CHALLENGE 1 : TODO
+-    asm volatile (
+-        "pushl %%ss \n"
+-        "pushl %%esp \n"
+-        "int %0 \n"
+-        "movl %%ebp, %%esp"
+-        : 
+-        : "i"(T_SWITCH_TOU)
+-    );
+ }
+-static void lab1_switch_to_kernel(void) {
++
++static void
++lab1_switch_to_kernel(void) {
+     //LAB1 CHALLENGE 1 :  TODO
+-    asm volatile (
+-        "int %0 \n"
+-        "movl %%ebp, %%esp \n"
+-        : 
+-        : "i"(T_SWITCH_TOK)
+-    );
+ }
+ 
+ static void
+diff -ruN lab1/kern/libs/readline.c lab2/kern/libs/readline.c
+--- lab1/kern/libs/readline.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/libs/readline.c	2021-11-08 18:05:44.000000000 +0600
+@@ -1,11 +1,11 @@
+ #include <stdio.h>
+ 
+-#define BUFSIZE    1024
++#define BUFSIZE 1024
+ static char buf[BUFSIZE];
+ 
+ /* *
+  * readline - get a line from stdin
+- * @prompt:        the string to be written to stdout
++ * @prompt:     the string to be written to stdout
+  *
+  * The readline() function will write the input string @prompt to
+  * stdout first. If the @prompt is NULL or the empty string,
+diff -ruN lab1/kern/mm/default_pmm.c lab2/kern/mm/default_pmm.c
+--- lab1/kern/mm/default_pmm.c	1970-01-01 06:00:00.000000000 +0600
++++ lab2/kern/mm/default_pmm.c	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,312 @@
++#include <pmm.h>
++#include <list.h>
++#include <string.h>
++#include <default_pmm.h>
++
++/*  In the First Fit algorithm, the allocator keeps a list of free blocks
++ * (known as the free list). Once receiving a allocation request for memory,
++ * it scans along the list for the first block that is large enough to satisfy
++ * the request. If the chosen block is significantly larger than requested, it
++ * is usually splitted, and the remainder will be added into the list as
++ * another free block.
++ *  Please refer to Page 196~198, Section 8.2 of Yan Wei Min's Chinese book
++ * "Data Structure -- C programming language".
++*/
++// LAB2 EXERCISE 1: YOUR CODE
++// you should rewrite functions: `default_init`, `default_init_memmap`,
++// `default_alloc_pages`, `default_free_pages`.
++/*
++ * Details of FFMA
++ * (1) Preparation:
++ *  In order to implement the First-Fit Memory Allocation (FFMA), we should
++ * manage the free memory blocks using a list. The struct `free_area_t` is used
++ * for the management of free memory blocks.
++ *  First, you should get familiar with the struct `list` in list.h. Struct
++ * `list` is a simple doubly linked list implementation. You should know how to
++ * USE `list_init`, `list_add`(`list_add_after`), `list_add_before`, `list_del`,
++ * `list_next`, `list_prev`.
++ *  There's a tricky method that is to transform a general `list` struct to a
++ * special struct (such as struct `page`), using the following MACROs: `le2page`
++ * (in memlayout.h), (and in future labs: `le2vma` (in vmm.h), `le2proc` (in
++ * proc.h), etc).
++ * (2) `default_init`:
++ *  You can reuse the demo `default_init` function to initialize the `free_list`
++ * and set `nr_free` to 0. `free_list` is used to record the free memory blocks.
++ * `nr_free` is the total number of the free memory blocks.
++ * (3) `default_init_memmap`:
++ *  CALL GRAPH: `kern_init` --> `pmm_init` --> `page_init` --> `init_memmap` -->
++ * `pmm_manager` --> `init_memmap`.
++ *  This function is used to initialize a free block (with parameter `addr_base`,
++ * `page_number`). In order to initialize a free block, firstly, you should
++ * initialize each page (defined in memlayout.h) in this free block. This
++ * procedure includes:
++ *  - Setting the bit `PG_property` of `p->flags`, which means this page is
++ * valid. P.S. In function `pmm_init` (in pmm.c), the bit `PG_reserved` of
++ * `p->flags` is already set.
++ *  - If this page is free and is not the first page of a free block,
++ * `p->property` should be set to 0.
++ *  - If this page is free and is the first page of a free block, `p->property`
++ * should be set to be the total number of pages in the block.
++ *  - `p->ref` should be 0, because now `p` is free and has no reference.
++ *  After that, We can use `p->page_link` to link this page into `free_list`.
++ * (e.g.: `list_add_before(&free_list, &(p->page_link));` )
++ *  Finally, we should update the sum of the free memory blocks: `nr_free += n`.
++ * (4) `default_alloc_pages`:
++ *  Search for the first free block (block size >= n) in the free list and reszie
++ * the block found, returning the address of this block as the address required by
++ * `malloc`.
++ *  (4.1)
++ *      So you should search the free list like this:
++ *          list_entry_t le = &free_list;
++ *          while((le=list_next(le)) != &free_list) {
++ *          ...
++ *      (4.1.1)
++ *          In the while loop, get the struct `page` and check if `p->property`
++ *      (recording the num of free pages in this block) >= n.
++ *              struct Page *p = le2page(le, page_link);
++ *              if(p->property >= n){ ...
++ *      (4.1.2)
++ *          If we find this `p`, it means we've found a free block with its size
++ *      >= n, whose first `n` pages can be malloced. Some flag bits of this page
++ *      should be set as the following: `PG_reserved = 1`, `PG_property = 0`.
++ *      Then, unlink the pages from `free_list`.
++ *          (4.1.2.1)
++ *              If `p->property > n`, we should re-calculate number of the rest
++ *          pages of this free block. (e.g.: `le2page(le,page_link))->property
++ *          = p->property - n;`)
++ *          (4.1.3)
++ *              Re-caluclate `nr_free` (number of the the rest of all free block).
++ *          (4.1.4)
++ *              return `p`.
++ *      (4.2)
++ *          If we can not find a free block with its size >=n, then return NULL.
++ * (5) `default_free_pages`:
++ *  re-link the pages into the free list, and may merge small free blocks into
++ * the big ones.
++ *  (5.1)
++ *      According to the base address of the withdrawed blocks, search the free
++ *  list for its correct position (with address from low to high), and insert
++ *  the pages. (May use `list_next`, `le2page`, `list_add_before`)
++ *  (5.2)
++ *      Reset the fields of the pages, such as `p->ref` and `p->flags` (PageProperty)
++ *  (5.3)
++ *      Try to merge blocks at lower or higher addresses. Notice: This should
++ *  change some pages' `p->property` correctly.
++ */
++free_area_t free_area;
++
++#define free_list (free_area.free_list)
++#define nr_free (free_area.nr_free)
++
++static void
++default_init(void) {
++    list_init(&free_list);
++    nr_free = 0;
++}
++
++static void
++default_init_memmap(struct Page *base, size_t n) {
++    assert(n > 0);
++    struct Page *p = base;
++    for (; p != base + n; p ++) {
++        assert(PageReserved(p));
++        p->flags = p->property = 0;
++        set_page_ref(p, 0);
++    }
++    base->property = n;
++    SetPageProperty(base);
++    nr_free += n;
++    list_add(&free_list, &(base->page_link));
++}
++
++static struct Page *
++default_alloc_pages(size_t n) {
++    assert(n > 0);
++    if (n > nr_free) {
++        return NULL;
++    }
++    struct Page *page = NULL;
++    list_entry_t *le = &free_list;
++    while ((le = list_next(le)) != &free_list) {
++        struct Page *p = le2page(le, page_link);
++        if (p->property >= n) {
++            page = p;
++            break;
++        }
++    }
++    if (page != NULL) {
++        list_del(&(page->page_link));
++        if (page->property > n) {
++            struct Page *p = page + n;
++            p->property = page->property - n;
++            list_add(&free_list, &(p->page_link));
++    }
++        nr_free -= n;
++        ClearPageProperty(page);
++    }
++    return page;
++}
++
++static void
++default_free_pages(struct Page *base, size_t n) {
++    assert(n > 0);
++    struct Page *p = base;
++    for (; p != base + n; p ++) {
++        assert(!PageReserved(p) && !PageProperty(p));
++        p->flags = 0;
++        set_page_ref(p, 0);
++    }
++    base->property = n;
++    SetPageProperty(base);
++    list_entry_t *le = list_next(&free_list);
++    while (le != &free_list) {
++        p = le2page(le, page_link);
++        le = list_next(le);
++        if (base + base->property == p) {
++            base->property += p->property;
++            ClearPageProperty(p);
++            list_del(&(p->page_link));
++        }
++        else if (p + p->property == base) {
++            p->property += base->property;
++            ClearPageProperty(base);
++            base = p;
++            list_del(&(p->page_link));
++        }
++    }
++    nr_free += n;
++    list_add(&free_list, &(base->page_link));
++}
++
++static size_t
++default_nr_free_pages(void) {
++    return nr_free;
++}
++
++static void
++basic_check(void) {
++    struct Page *p0, *p1, *p2;
++    p0 = p1 = p2 = NULL;
++    assert((p0 = alloc_page()) != NULL);
++    assert((p1 = alloc_page()) != NULL);
++    assert((p2 = alloc_page()) != NULL);
++
++    assert(p0 != p1 && p0 != p2 && p1 != p2);
++    assert(page_ref(p0) == 0 && page_ref(p1) == 0 && page_ref(p2) == 0);
++
++    assert(page2pa(p0) < npage * PGSIZE);
++    assert(page2pa(p1) < npage * PGSIZE);
++    assert(page2pa(p2) < npage * PGSIZE);
++
++    list_entry_t free_list_store = free_list;
++    list_init(&free_list);
++    assert(list_empty(&free_list));
++
++    unsigned int nr_free_store = nr_free;
++    nr_free = 0;
++
++    assert(alloc_page() == NULL);
++
++    free_page(p0);
++    free_page(p1);
++    free_page(p2);
++    assert(nr_free == 3);
++
++    assert((p0 = alloc_page()) != NULL);
++    assert((p1 = alloc_page()) != NULL);
++    assert((p2 = alloc_page()) != NULL);
++
++    assert(alloc_page() == NULL);
++
++    free_page(p0);
++    assert(!list_empty(&free_list));
++
++    struct Page *p;
++    assert((p = alloc_page()) == p0);
++    assert(alloc_page() == NULL);
++
++    assert(nr_free == 0);
++    free_list = free_list_store;
++    nr_free = nr_free_store;
++
++    free_page(p);
++    free_page(p1);
++    free_page(p2);
++}
++
++// LAB2: below code is used to check the first fit allocation algorithm (your EXERCISE 1) 
++// NOTICE: You SHOULD NOT CHANGE basic_check, default_check functions!
++static void
++default_check(void) {
++    int count = 0, total = 0;
++    list_entry_t *le = &free_list;
++    while ((le = list_next(le)) != &free_list) {
++        struct Page *p = le2page(le, page_link);
++        assert(PageProperty(p));
++        count ++, total += p->property;
++    }
++    assert(total == nr_free_pages());
++
++    basic_check();
++
++    struct Page *p0 = alloc_pages(5), *p1, *p2;
++    assert(p0 != NULL);
++    assert(!PageProperty(p0));
++
++    list_entry_t free_list_store = free_list;
++    list_init(&free_list);
++    assert(list_empty(&free_list));
++    assert(alloc_page() == NULL);
++
++    unsigned int nr_free_store = nr_free;
++    nr_free = 0;
++
++    free_pages(p0 + 2, 3);
++    assert(alloc_pages(4) == NULL);
++    assert(PageProperty(p0 + 2) && p0[2].property == 3);
++    assert((p1 = alloc_pages(3)) != NULL);
++    assert(alloc_page() == NULL);
++    assert(p0 + 2 == p1);
++
++    p2 = p0 + 1;
++    free_page(p0);
++    free_pages(p1, 3);
++    assert(PageProperty(p0) && p0->property == 1);
++    assert(PageProperty(p1) && p1->property == 3);
++
++    assert((p0 = alloc_page()) == p2 - 1);
++    free_page(p0);
++    assert((p0 = alloc_pages(2)) == p2 + 1);
++
++    free_pages(p0, 2);
++    free_page(p2);
++
++    assert((p0 = alloc_pages(5)) != NULL);
++    assert(alloc_page() == NULL);
++
++    assert(nr_free == 0);
++    nr_free = nr_free_store;
++
++    free_list = free_list_store;
++    free_pages(p0, 5);
++
++    le = &free_list;
++    while ((le = list_next(le)) != &free_list) {
++        assert(le->next->prev == le && le->prev->next == le);
++        struct Page *p = le2page(le, page_link);
++        count --, total -= p->property;
++    }
++    assert(count == 0);
++    assert(total == 0);
++}
++
++const struct pmm_manager default_pmm_manager = {
++    .name = "default_pmm_manager",
++    .init = default_init,
++    .init_memmap = default_init_memmap,
++    .alloc_pages = default_alloc_pages,
++    .free_pages = default_free_pages,
++    .nr_free_pages = default_nr_free_pages,
++    .check = default_check,
++};
++
+diff -ruN lab1/kern/mm/default_pmm.h lab2/kern/mm/default_pmm.h
+--- lab1/kern/mm/default_pmm.h	1970-01-01 06:00:00.000000000 +0600
++++ lab2/kern/mm/default_pmm.h	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,9 @@
++#ifndef __KERN_MM_DEFAULT_PMM_H__
++#define  __KERN_MM_DEFAULT_PMM_H__
++
++#include <pmm.h>
++
++extern const struct pmm_manager default_pmm_manager;
++
++#endif /* ! __KERN_MM_DEFAULT_PMM_H__ */
++
+diff -ruN lab1/kern/mm/memlayout.h lab2/kern/mm/memlayout.h
+--- lab1/kern/mm/memlayout.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/mm/memlayout.h	2021-11-08 18:05:44.000000000 +0600
+@@ -4,26 +4,127 @@
+ /* This file contains the definitions for memory management in our OS. */
+ 
+ /* global segment number */
+-#define SEG_KTEXT    1
+-#define SEG_KDATA    2
+-#define SEG_UTEXT    3
+-#define SEG_UDATA    4
+-#define SEG_TSS        5
+-
+-/* global descriptor numbers */
+-#define GD_KTEXT    ((SEG_KTEXT) << 3)        // kernel text
+-#define GD_KDATA    ((SEG_KDATA) << 3)        // kernel data
+-#define GD_UTEXT    ((SEG_UTEXT) << 3)        // user text
+-#define GD_UDATA    ((SEG_UDATA) << 3)        // user data
+-#define GD_TSS        ((SEG_TSS) << 3)        // task segment selector
++#define SEG_KTEXT   1
++#define SEG_KDATA   2
++#define SEG_UTEXT   3
++#define SEG_UDATA   4
++#define SEG_TSS     5
++
++/* global descrptor numbers */
++#define GD_KTEXT    ((SEG_KTEXT) << 3)      // kernel text
++#define GD_KDATA    ((SEG_KDATA) << 3)      // kernel data
++#define GD_UTEXT    ((SEG_UTEXT) << 3)      // user text
++#define GD_UDATA    ((SEG_UDATA) << 3)      // user data
++#define GD_TSS      ((SEG_TSS) << 3)        // task segment selector
+ 
+-#define DPL_KERNEL    (0)
++#define DPL_KERNEL  (0)
+ #define DPL_USER    (3)
+ 
+-#define KERNEL_CS    ((GD_KTEXT) | DPL_KERNEL)
+-#define KERNEL_DS    ((GD_KDATA) | DPL_KERNEL)
+-#define USER_CS        ((GD_UTEXT) | DPL_USER)
+-#define USER_DS        ((GD_UDATA) | DPL_USER)
++#define KERNEL_CS   ((GD_KTEXT) | DPL_KERNEL)
++#define KERNEL_DS   ((GD_KDATA) | DPL_KERNEL)
++#define USER_CS     ((GD_UTEXT) | DPL_USER)
++#define USER_DS     ((GD_UDATA) | DPL_USER)
++
++/* *
++ * Virtual memory map:                                          Permissions
++ *                                                              kernel/user
++ *
++ *     4G ------------------> +---------------------------------+
++ *                            |                                 |
++ *                            |         Empty Memory (*)        |
++ *                            |                                 |
++ *                            +---------------------------------+ 0xFB000000
++ *                            |   Cur. Page Table (Kern, RW)    | RW/-- PTSIZE
++ *     VPT -----------------> +---------------------------------+ 0xFAC00000
++ *                            |        Invalid Memory (*)       | --/--
++ *     KERNTOP -------------> +---------------------------------+ 0xF8000000
++ *                            |                                 |
++ *                            |    Remapped Physical Memory     | RW/-- KMEMSIZE
++ *                            |                                 |
++ *     KERNBASE ------------> +---------------------------------+ 0xC0000000
++ *                            |                                 |
++ *                            |                                 |
++ *                            |                                 |
++ *                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
++ * (*) Note: The kernel ensures that "Invalid Memory" is *never* mapped.
++ *     "Empty Memory" is normally unmapped, but user programs may map pages
++ *     there if desired.
++ *
++ * */
++
++/* All physical memory mapped at this address */
++#define KERNBASE            0xC0000000
++#define KMEMSIZE            0x38000000                  // the maximum amount of physical memory
++#define KERNTOP             (KERNBASE + KMEMSIZE)
++
++/* *
++ * Virtual page table. Entry PDX[VPT] in the PD (Page Directory) contains
++ * a pointer to the page directory itself, thereby turning the PD into a page
++ * table, which maps all the PTEs (Page Table Entry) containing the page mappings
++ * for the entire virtual address space into that 4 Meg region starting at VPT.
++ * */
++#define VPT                 0xFAC00000
++
++#define KSTACKPAGE          2                           // # of pages in kernel stack
++#define KSTACKSIZE          (KSTACKPAGE * PGSIZE)       // sizeof kernel stack
++
++#ifndef __ASSEMBLER__
++
++#include <defs.h>
++#include <atomic.h>
++#include <list.h>
++
++typedef uintptr_t pte_t;
++typedef uintptr_t pde_t;
++
++// some constants for bios interrupt 15h AX = 0xE820
++#define E820MAX             20      // number of entries in E820MAP
++#define E820_ARM            1       // address range memory
++#define E820_ARR            2       // address range reserved
++
++struct e820map {
++    int nr_map;
++    struct {
++        uint64_t addr;
++        uint64_t size;
++        uint32_t type;
++    } __attribute__((packed)) map[E820MAX];
++};
++
++/* *
++ * struct Page - Page descriptor structures. Each Page describes one
++ * physical page. In kern/mm/pmm.h, you can find lots of useful functions
++ * that convert Page to other data types, such as phyical address.
++ * */
++struct Page {
++    int ref;                        // page frame's reference counter
++    uint32_t flags;                 // array of flags that describe the status of the page frame
++    unsigned int property;          // the num of free block, used in first fit pm manager
++    list_entry_t page_link;         // free list link
++};
++
++/* Flags describing the status of a page frame */
++#define PG_reserved                 0       // if this bit=1: the Page is reserved for kernel, cannot be used in alloc/free_pages; otherwise, this bit=0 
++#define PG_property                 1       // if this bit=1: the Page is the head page of a free memory block(contains some continuous_addrress pages), and can be used in alloc_pages; if this bit=0: if the Page is the the head page of a free memory block, then this Page and the memory block is alloced. Or this Page isn't the head page.
++
++#define SetPageReserved(page)       set_bit(PG_reserved, &((page)->flags))
++#define ClearPageReserved(page)     clear_bit(PG_reserved, &((page)->flags))
++#define PageReserved(page)          test_bit(PG_reserved, &((page)->flags))
++#define SetPageProperty(page)       set_bit(PG_property, &((page)->flags))
++#define ClearPageProperty(page)     clear_bit(PG_property, &((page)->flags))
++#define PageProperty(page)          test_bit(PG_property, &((page)->flags))
++
++// convert list entry to page
++#define le2page(le, member)                 \
++    to_struct((le), struct Page, member)
++
++/* free_area_t - maintains a doubly linked list to record free (unused) pages */
++typedef struct {
++    list_entry_t free_list;         // the list header
++    unsigned int nr_free;           // # of free pages in this free list
++} free_area_t;
++
++#endif /* !__ASSEMBLER__ */
+ 
+ #endif /* !__KERN_MM_MEMLAYOUT_H__ */
+ 
+diff -ruN lab1/kern/mm/mmu.h lab2/kern/mm/mmu.h
+--- lab1/kern/mm/mmu.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/mm/mmu.h	2021-11-08 18:05:44.000000000 +0600
+@@ -2,61 +2,76 @@
+ #define __KERN_MM_MMU_H__
+ 
+ /* Eflags register */
+-#define FL_CF            0x00000001    // Carry Flag
+-#define FL_PF            0x00000004    // Parity Flag
+-#define FL_AF            0x00000010    // Auxiliary carry Flag
+-#define FL_ZF            0x00000040    // Zero Flag
+-#define FL_SF            0x00000080    // Sign Flag
+-#define FL_TF            0x00000100    // Trap Flag
+-#define FL_IF            0x00000200    // Interrupt Flag
+-#define FL_DF            0x00000400    // Direction Flag
+-#define FL_OF            0x00000800    // Overflow Flag
+-#define FL_IOPL_MASK    0x00003000    // I/O Privilege Level bitmask
+-#define FL_IOPL_0        0x00000000    //   IOPL == 0
+-#define FL_IOPL_1        0x00001000    //   IOPL == 1
+-#define FL_IOPL_2        0x00002000    //   IOPL == 2
+-#define FL_IOPL_3        0x00003000    //   IOPL == 3
+-#define FL_NT            0x00004000    // Nested Task
+-#define FL_RF            0x00010000    // Resume Flag
+-#define FL_VM            0x00020000    // Virtual 8086 mode
+-#define FL_AC            0x00040000    // Alignment Check
+-#define FL_VIF            0x00080000    // Virtual Interrupt Flag
+-#define FL_VIP            0x00100000    // Virtual Interrupt Pending
+-#define FL_ID            0x00200000    // ID flag
++#define FL_CF           0x00000001  // Carry Flag
++#define FL_PF           0x00000004  // Parity Flag
++#define FL_AF           0x00000010  // Auxiliary carry Flag
++#define FL_ZF           0x00000040  // Zero Flag
++#define FL_SF           0x00000080  // Sign Flag
++#define FL_TF           0x00000100  // Trap Flag
++#define FL_IF           0x00000200  // Interrupt Flag
++#define FL_DF           0x00000400  // Direction Flag
++#define FL_OF           0x00000800  // Overflow Flag
++#define FL_IOPL_MASK    0x00003000  // I/O Privilege Level bitmask
++#define FL_IOPL_0       0x00000000  //   IOPL == 0
++#define FL_IOPL_1       0x00001000  //   IOPL == 1
++#define FL_IOPL_2       0x00002000  //   IOPL == 2
++#define FL_IOPL_3       0x00003000  //   IOPL == 3
++#define FL_NT           0x00004000  // Nested Task
++#define FL_RF           0x00010000  // Resume Flag
++#define FL_VM           0x00020000  // Virtual 8086 mode
++#define FL_AC           0x00040000  // Alignment Check
++#define FL_VIF          0x00080000  // Virtual Interrupt Flag
++#define FL_VIP          0x00100000  // Virtual Interrupt Pending
++#define FL_ID           0x00200000  // ID flag
+ 
+ /* Application segment type bits */
+-#define STA_X            0x8            // Executable segment
+-#define STA_E            0x4            // Expand down (non-executable segments)
+-#define STA_C            0x4            // Conforming code segment (executable only)
+-#define STA_W            0x2            // Writeable (non-executable segments)
+-#define STA_R            0x2            // Readable (executable segments)
+-#define STA_A            0x1            // Accessed
++#define STA_X           0x8         // Executable segment
++#define STA_E           0x4         // Expand down (non-executable segments)
++#define STA_C           0x4         // Conforming code segment (executable only)
++#define STA_W           0x2         // Writeable (non-executable segments)
++#define STA_R           0x2         // Readable (executable segments)
++#define STA_A           0x1         // Accessed
+ 
+ /* System segment type bits */
+-#define STS_T16A        0x1            // Available 16-bit TSS
+-#define STS_LDT            0x2            // Local Descriptor Table
+-#define STS_T16B        0x3            // Busy 16-bit TSS
+-#define STS_CG16        0x4            // 16-bit Call Gate
+-#define STS_TG            0x5            // Task Gate / Coum Transmitions
+-#define STS_IG16        0x6            // 16-bit Interrupt Gate
+-#define STS_TG16        0x7            // 16-bit Trap Gate
+-#define STS_T32A        0x9            // Available 32-bit TSS
+-#define STS_T32B        0xB            // Busy 32-bit TSS
+-#define STS_CG32        0xC            // 32-bit Call Gate
+-#define STS_IG32        0xE            // 32-bit Interrupt Gate
+-#define STS_TG32        0xF            // 32-bit Trap Gate
++#define STS_T16A        0x1         // Available 16-bit TSS
++#define STS_LDT         0x2         // Local Descriptor Table
++#define STS_T16B        0x3         // Busy 16-bit TSS
++#define STS_CG16        0x4         // 16-bit Call Gate
++#define STS_TG          0x5         // Task Gate / Coum Transmitions
++#define STS_IG16        0x6         // 16-bit Interrupt Gate
++#define STS_TG16        0x7         // 16-bit Trap Gate
++#define STS_T32A        0x9         // Available 32-bit TSS
++#define STS_T32B        0xB         // Busy 32-bit TSS
++#define STS_CG32        0xC         // 32-bit Call Gate
++#define STS_IG32        0xE         // 32-bit Interrupt Gate
++#define STS_TG32        0xF         // 32-bit Trap Gate
++
++#ifdef __ASSEMBLER__
++
++#define SEG_NULL                                                \
++    .word 0, 0;                                                 \
++    .byte 0, 0, 0, 0
++
++#define SEG_ASM(type,base,lim)                                  \
++    .word (((lim) >> 12) & 0xffff), ((base) & 0xffff);          \
++    .byte (((base) >> 16) & 0xff), (0x90 | (type)),             \
++        (0xC0 | (((lim) >> 28) & 0xf)), (((base) >> 24) & 0xff)
++
++#else /* not __ASSEMBLER__ */
++
++#include <defs.h>
+ 
+ /* Gate descriptors for interrupts and traps */
+ struct gatedesc {
+-    unsigned gd_off_15_0 : 16;        // low 16 bits of offset in segment
++    unsigned gd_off_15_0 : 16;      // low 16 bits of offset in segment
+     unsigned gd_ss : 16;            // segment selector
+-    unsigned gd_args : 5;            // # args, 0 for interrupt/trap gates
+-    unsigned gd_rsv1 : 3;            // reserved(should be zero I guess)
+-    unsigned gd_type : 4;            // type(STS_{TG,IG32,TG32})
+-    unsigned gd_s : 1;                // must be 0 (system)
++    unsigned gd_args : 5;           // # args, 0 for interrupt/trap gates
++    unsigned gd_rsv1 : 3;           // reserved(should be zero I guess)
++    unsigned gd_type : 4;           // type(STS_{TG,IG32,TG32})
++    unsigned gd_s : 1;              // must be 0 (system)
+     unsigned gd_dpl : 2;            // descriptor(meaning new) privilege level
+-    unsigned gd_p : 1;                // Present
+-    unsigned gd_off_31_16 : 16;        // high bits of offset in segment
++    unsigned gd_p : 1;              // Present
++    unsigned gd_off_31_16 : 16;     // high bits of offset in segment
+ };
+ 
+ /* *
+@@ -68,71 +83,71 @@
+  *          for software to invoke this interrupt/trap gate explicitly
+  *          using an int instruction.
+  * */
+-#define SETGATE(gate, istrap, sel, off, dpl) {            \
+-    (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;        \
+-    (gate).gd_ss = (sel);                                \
+-    (gate).gd_args = 0;                                    \
+-    (gate).gd_rsv1 = 0;                                    \
+-    (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;    \
+-    (gate).gd_s = 0;                                    \
+-    (gate).gd_dpl = (dpl);                                \
+-    (gate).gd_p = 1;                                    \
+-    (gate).gd_off_31_16 = (uint32_t)(off) >> 16;        \
+-}
++#define SETGATE(gate, istrap, sel, off, dpl) {               \
++        (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;      \
++        (gate).gd_ss = (sel);                                \
++        (gate).gd_args = 0;                                 \
++        (gate).gd_rsv1 = 0;                                 \
++        (gate).gd_type = (istrap) ? STS_TG32 : STS_IG32;    \
++        (gate).gd_s = 0;                                    \
++        (gate).gd_dpl = (dpl);                              \
++        (gate).gd_p = 1;                                    \
++        (gate).gd_off_31_16 = (uint32_t)(off) >> 16;        \
++    }
+ 
+ /* Set up a call gate descriptor */
+-#define SETCALLGATE(gate, ss, off, dpl) {                \
+-    (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;        \
+-    (gate).gd_ss = (ss);                                \
+-    (gate).gd_args = 0;                                    \
+-    (gate).gd_rsv1 = 0;                                    \
+-    (gate).gd_type = STS_CG32;                            \
+-    (gate).gd_s = 0;                                    \
+-    (gate).gd_dpl = (dpl);                                \
+-    (gate).gd_p = 1;                                    \
+-    (gate).gd_off_31_16 = (uint32_t)(off) >> 16;        \
+-}
++#define SETCALLGATE(gate, ss, off, dpl) {                   \
++        (gate).gd_off_15_0 = (uint32_t)(off) & 0xffff;      \
++        (gate).gd_ss = (ss);                                \
++        (gate).gd_args = 0;                                 \
++        (gate).gd_rsv1 = 0;                                 \
++        (gate).gd_type = STS_CG32;                          \
++        (gate).gd_s = 0;                                    \
++        (gate).gd_dpl = (dpl);                              \
++        (gate).gd_p = 1;                                    \
++        (gate).gd_off_31_16 = (uint32_t)(off) >> 16;        \
++    }
+ 
+ /* segment descriptors */
+ struct segdesc {
+-    unsigned sd_lim_15_0 : 16;        // low bits of segment limit
+-    unsigned sd_base_15_0 : 16;        // low bits of segment base address
+-    unsigned sd_base_23_16 : 8;        // middle bits of segment base address
+-    unsigned sd_type : 4;            // segment type (see STS_ constants)
+-    unsigned sd_s : 1;                // 0 = system, 1 = application
++    unsigned sd_lim_15_0 : 16;      // low bits of segment limit
++    unsigned sd_base_15_0 : 16;     // low bits of segment base address
++    unsigned sd_base_23_16 : 8;     // middle bits of segment base address
++    unsigned sd_type : 4;           // segment type (see STS_ constants)
++    unsigned sd_s : 1;              // 0 = system, 1 = application
+     unsigned sd_dpl : 2;            // descriptor Privilege Level
+-    unsigned sd_p : 1;                // present
+-    unsigned sd_lim_19_16 : 4;        // high bits of segment limit
++    unsigned sd_p : 1;              // present
++    unsigned sd_lim_19_16 : 4;      // high bits of segment limit
+     unsigned sd_avl : 1;            // unused (available for software use)
+-    unsigned sd_rsv1 : 1;            // reserved
+-    unsigned sd_db : 1;                // 0 = 16-bit segment, 1 = 32-bit segment
+-    unsigned sd_g : 1;                // granularity: limit scaled by 4K when set
+-    unsigned sd_base_31_24 : 8;        // high bits of segment base address
++    unsigned sd_rsv1 : 1;           // reserved
++    unsigned sd_db : 1;             // 0 = 16-bit segment, 1 = 32-bit segment
++    unsigned sd_g : 1;              // granularity: limit scaled by 4K when set
++    unsigned sd_base_31_24 : 8;     // high bits of segment base address
+ };
+ 
+ #define SEG_NULL                                            \
+-    (struct segdesc){0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
++    (struct segdesc) {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}
+ 
+-#define SEG(type, base, lim, dpl)                        \
+-    (struct segdesc){                                    \
+-        ((lim) >> 12) & 0xffff, (base) & 0xffff,        \
+-        ((base) >> 16) & 0xff, type, 1, dpl, 1,            \
+-        (unsigned)(lim) >> 28, 0, 0, 1, 1,                \
+-        (unsigned) (base) >> 24                            \
++#define SEG(type, base, lim, dpl)                           \
++    (struct segdesc) {                                      \
++        ((lim) >> 12) & 0xffff, (base) & 0xffff,            \
++        ((base) >> 16) & 0xff, type, 1, dpl, 1,             \
++        (unsigned)(lim) >> 28, 0, 0, 1, 1,                  \
++        (unsigned) (base) >> 24                             \
+     }
+ 
+-#define SEG16(type, base, lim, dpl)                        \
+-    (struct segdesc){                                    \
+-        (lim) & 0xffff, (base) & 0xffff,                \
+-        ((base) >> 16) & 0xff, type, 1, dpl, 1,            \
+-        (unsigned) (lim) >> 16, 0, 0, 1, 0,                \
+-        (unsigned) (base) >> 24                            \
++#define SEGTSS(type, base, lim, dpl)                        \
++    (struct segdesc) {                                      \
++        (lim) & 0xffff, (base) & 0xffff,                    \
++        ((base) >> 16) & 0xff, type, 0, dpl, 1,             \
++        (unsigned) (lim) >> 16, 0, 0, 1, 0,                 \
++        (unsigned) (base) >> 24                             \
+     }
+ 
+ /* task state segment format (as described by the Pentium architecture book) */
+ struct taskstate {
+-    uint32_t ts_link;        // old ts selector
+-    uintptr_t ts_esp0;        // stack pointers and segment selectors
++    uint32_t ts_link;       // old ts selector
++    uintptr_t ts_esp0;      // stack pointers and segment selectors
+     uint16_t ts_ss0;        // after an increase in privilege level
+     uint16_t ts_padding1;
+     uintptr_t ts_esp1;
+@@ -141,8 +156,8 @@
+     uintptr_t ts_esp2;
+     uint16_t ts_ss2;
+     uint16_t ts_padding3;
+-    uintptr_t ts_cr3;        // page directory base
+-    uintptr_t ts_eip;        // saved state from last task switch
++    uintptr_t ts_cr3;       // page directory base
++    uintptr_t ts_eip;       // saved state from last task switch
+     uint32_t ts_eflags;
+     uint32_t ts_eax;        // more saved state (registers)
+     uint32_t ts_ecx;
+@@ -152,7 +167,7 @@
+     uintptr_t ts_ebp;
+     uint32_t ts_esi;
+     uint32_t ts_edi;
+-    uint16_t ts_es;            // even more saved state (segment selectors)
++    uint16_t ts_es;         // even more saved state (segment selectors)
+     uint16_t ts_padding4;
+     uint16_t ts_cs;
+     uint16_t ts_padding5;
+@@ -166,9 +181,92 @@
+     uint16_t ts_padding9;
+     uint16_t ts_ldt;
+     uint16_t ts_padding10;
+-    uint16_t ts_t;            // trap on task switch
+-    uint16_t ts_iomb;        // i/o map base address
+-};
++    uint16_t ts_t;          // trap on task switch
++    uint16_t ts_iomb;       // i/o map base address
++} __attribute__((packed));
++
++#endif /* !__ASSEMBLER__ */
++
++// A linear address 'la' has a three-part structure as follows:
++//
++// +--------10------+-------10-------+---------12----------+
++// | Page Directory |   Page Table   | Offset within Page  |
++// |      Index     |     Index      |                     |
++// +----------------+----------------+---------------------+
++//  \--- PDX(la) --/ \--- PTX(la) --/ \---- PGOFF(la) ----/
++//  \----------- PPN(la) -----------/
++//
++// The PDX, PTX, PGOFF, and PPN macros decompose linear addresses as shown.
++// To construct a linear address la from PDX(la), PTX(la), and PGOFF(la),
++// use PGADDR(PDX(la), PTX(la), PGOFF(la)).
++
++// page directory index
++#define PDX(la) ((((uintptr_t)(la)) >> PDXSHIFT) & 0x3FF)
++
++// page table index
++#define PTX(la) ((((uintptr_t)(la)) >> PTXSHIFT) & 0x3FF)
++
++// page number field of address
++#define PPN(la) (((uintptr_t)(la)) >> PTXSHIFT)
++
++// offset in page
++#define PGOFF(la) (((uintptr_t)(la)) & 0xFFF)
++
++// construct linear address from indexes and offset
++#define PGADDR(d, t, o) ((uintptr_t)((d) << PDXSHIFT | (t) << PTXSHIFT | (o)))
++
++// address in page table or page directory entry
++#define PTE_ADDR(pte)   ((uintptr_t)(pte) & ~0xFFF)
++#define PDE_ADDR(pde)   PTE_ADDR(pde)
++
++/* page directory and page table constants */
++#define NPDEENTRY       1024                    // page directory entries per page directory
++#define NPTEENTRY       1024                    // page table entries per page table
++
++#define PGSIZE          4096                    // bytes mapped by a page
++#define PGSHIFT         12                      // log2(PGSIZE)
++#define PTSIZE          (PGSIZE * NPTEENTRY)    // bytes mapped by a page directory entry
++#define PTSHIFT         22                      // log2(PTSIZE)
++
++#define PTXSHIFT        12                      // offset of PTX in a linear address
++#define PDXSHIFT        22                      // offset of PDX in a linear address
++
++/* page table/directory entry flags */
++#define PTE_P           0x001                   // Present
++#define PTE_W           0x002                   // Writeable
++#define PTE_U           0x004                   // User
++#define PTE_PWT         0x008                   // Write-Through
++#define PTE_PCD         0x010                   // Cache-Disable
++#define PTE_A           0x020                   // Accessed
++#define PTE_D           0x040                   // Dirty
++#define PTE_PS          0x080                   // Page Size
++#define PTE_MBZ         0x180                   // Bits must be zero
++#define PTE_AVAIL       0xE00                   // Available for software use
++                                                // The PTE_AVAIL bits aren't used by the kernel or interpreted by the
++                                                // hardware, so user processes are allowed to set them arbitrarily.
++
++#define PTE_USER        (PTE_U | PTE_W | PTE_P)
++
++/* Control Register flags */
++#define CR0_PE          0x00000001              // Protection Enable
++#define CR0_MP          0x00000002              // Monitor coProcessor
++#define CR0_EM          0x00000004              // Emulation
++#define CR0_TS          0x00000008              // Task Switched
++#define CR0_ET          0x00000010              // Extension Type
++#define CR0_NE          0x00000020              // Numeric Errror
++#define CR0_WP          0x00010000              // Write Protect
++#define CR0_AM          0x00040000              // Alignment Mask
++#define CR0_NW          0x20000000              // Not Writethrough
++#define CR0_CD          0x40000000              // Cache Disable
++#define CR0_PG          0x80000000              // Paging
++
++#define CR4_PCE         0x00000100              // Performance counter enable
++#define CR4_MCE         0x00000040              // Machine Check Enable
++#define CR4_PSE         0x00000010              // Page Size Extensions
++#define CR4_DE          0x00000008              // Debugging Extensions
++#define CR4_TSD         0x00000004              // Time Stamp Disable
++#define CR4_PVI         0x00000002              // Protected-Mode Virtual Interrupts
++#define CR4_VME         0x00000001              // V86 Mode Extensions
+ 
+ #endif /* !__KERN_MM_MMU_H__ */
+ 
+diff -ruN lab1/kern/mm/pmm.c lab2/kern/mm/pmm.c
+--- lab1/kern/mm/pmm.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/mm/pmm.c	2021-11-08 18:05:44.000000000 +0600
+@@ -1,8 +1,13 @@
+ #include <defs.h>
+ #include <x86.h>
++#include <stdio.h>
++#include <string.h>
+ #include <mmu.h>
+ #include <memlayout.h>
+ #include <pmm.h>
++#include <default_pmm.h>
++#include <sync.h>
++#include <error.h>
+ 
+ /* *
+  * Task State Segment:
+@@ -26,6 +31,36 @@
+  * */
+ static struct taskstate ts = {0};
+ 
++// virtual address of physicall page array
++struct Page *pages;
++// amount of physical memory (in pages)
++size_t npage = 0;
++
++// virtual address of boot-time page directory
++extern pde_t __boot_pgdir;
++pde_t *boot_pgdir = &__boot_pgdir;
++// physical address of boot-time page directory
++uintptr_t boot_cr3;
++
++// physical memory management
++const struct pmm_manager *pmm_manager;
++
++/* *
++ * The page directory entry corresponding to the virtual address range
++ * [VPT, VPT + PTSIZE) points to the page directory itself. Thus, the page
++ * directory is treated as a page table as well as a page directory.
++ *
++ * One result of treating the page directory as a page table is that all PTEs
++ * can be accessed though a "virtual page table" at virtual address VPT. And the
++ * PTE for number n is stored in vpt[n].
++ *
++ * A second consequence is that the contents of the current page directory will
++ * always available at virtual address PGADDR(PDX(VPT), PDX(VPT), 0), to which
++ * vpd is set bellow.
++ * */
++pte_t * const vpt = (pte_t *)VPT;
++pde_t * const vpd = (pde_t *)PGADDR(PDX(VPT), PDX(VPT), 0);
++
+ /* *
+  * Global Descriptor Table:
+  *
+@@ -45,13 +80,17 @@
+     [SEG_KDATA] = SEG(STA_W, 0x0, 0xFFFFFFFF, DPL_KERNEL),
+     [SEG_UTEXT] = SEG(STA_X | STA_R, 0x0, 0xFFFFFFFF, DPL_USER),
+     [SEG_UDATA] = SEG(STA_W, 0x0, 0xFFFFFFFF, DPL_USER),
+-    [SEG_TSS]    = SEG_NULL,
++    [SEG_TSS]   = SEG_NULL,
+ };
+ 
+ static struct pseudodesc gdt_pd = {
+-    sizeof(gdt) - 1, (uint32_t)gdt
++    sizeof(gdt) - 1, (uintptr_t)gdt
+ };
+ 
++static void check_alloc_page(void);
++static void check_pgdir(void);
++static void check_boot_pgdir(void);
++
+ /* *
+  * lgdt - load the global descriptor table register and reset the
+  * data/code segement registers for kernel.
+@@ -68,21 +107,25 @@
+     asm volatile ("ljmp %0, $1f\n 1:\n" :: "i" (KERNEL_CS));
+ }
+ 
+-/* temporary kernel stack */
+-uint8_t stack0[1024];
++/* *
++ * load_esp0 - change the ESP0 in default task state segment,
++ * so that we can use different kernel stack when we trap frame
++ * user to kernel.
++ * */
++void
++load_esp0(uintptr_t esp0) {
++    ts.ts_esp0 = esp0;
++}
+ 
+ /* gdt_init - initialize the default GDT and TSS */
+ static void
+ gdt_init(void) {
+-    // Setup a TSS so that we can get the right stack when we trap from
+-    // user to the kernel. But not safe here, it's only a temporary value,
+-    // it will be set to KSTACKTOP in lab2.
+-    ts.ts_esp0 = (uint32_t)&stack0 + sizeof(stack0);
++    // set boot kernel stack and default SS0
++    load_esp0((uintptr_t)bootstacktop);
+     ts.ts_ss0 = KERNEL_DS;
+ 
+     // initialize the TSS filed of the gdt
+-    gdt[SEG_TSS] = SEG16(STS_T32A, (uint32_t)&ts, sizeof(ts), DPL_KERNEL);
+-    gdt[SEG_TSS].sd_s = 0;
++    gdt[SEG_TSS] = SEGTSS(STS_T32A, (uintptr_t)&ts, sizeof(ts), DPL_KERNEL);
+ 
+     // reload all segment registers
+     lgdt(&gdt_pd);
+@@ -91,9 +134,473 @@
+     ltr(GD_TSS);
+ }
+ 
++//init_pmm_manager - initialize a pmm_manager instance
++static void
++init_pmm_manager(void) {
++    pmm_manager = &default_pmm_manager;
++    cprintf("memory management: %s\n", pmm_manager->name);
++    pmm_manager->init();
++}
++
++//init_memmap - call pmm->init_memmap to build Page struct for free memory  
++static void
++init_memmap(struct Page *base, size_t n) {
++    pmm_manager->init_memmap(base, n);
++}
++
++//alloc_pages - call pmm->alloc_pages to allocate a continuous n*PAGESIZE memory 
++struct Page *
++alloc_pages(size_t n) {
++    struct Page *page=NULL;
++    bool intr_flag;
++    local_intr_save(intr_flag);
++    {
++        page = pmm_manager->alloc_pages(n);
++    }
++    local_intr_restore(intr_flag);
++    return page;
++}
++
++//free_pages - call pmm->free_pages to free a continuous n*PAGESIZE memory 
++void
++free_pages(struct Page *base, size_t n) {
++    bool intr_flag;
++    local_intr_save(intr_flag);
++    {
++        pmm_manager->free_pages(base, n);
++    }
++    local_intr_restore(intr_flag);
++}
++
++//nr_free_pages - call pmm->nr_free_pages to get the size (nr*PAGESIZE) 
++//of current free memory
++size_t
++nr_free_pages(void) {
++    size_t ret;
++    bool intr_flag;
++    local_intr_save(intr_flag);
++    {
++        ret = pmm_manager->nr_free_pages();
++    }
++    local_intr_restore(intr_flag);
++    return ret;
++}
++
+ /* pmm_init - initialize the physical memory management */
++static void
++page_init(void) {
++    struct e820map *memmap = (struct e820map *)(0x8000 + KERNBASE);
++    uint64_t maxpa = 0;
++
++    cprintf("e820map:\n");
++    int i;
++    for (i = 0; i < memmap->nr_map; i ++) {
++        uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
++        cprintf("  memory: %08llx, [%08llx, %08llx], type = %d.\n",
++                memmap->map[i].size, begin, end - 1, memmap->map[i].type);
++        if (memmap->map[i].type == E820_ARM) {
++            if (maxpa < end && begin < KMEMSIZE) {
++                maxpa = end;
++            }
++        }
++    }
++    if (maxpa > KMEMSIZE) {
++        maxpa = KMEMSIZE;
++    }
++
++    extern char end[];
++
++    npage = maxpa / PGSIZE;
++    pages = (struct Page *)ROUNDUP((void *)end, PGSIZE);
++
++    for (i = 0; i < npage; i ++) {
++        SetPageReserved(pages + i);
++    }
++
++    uintptr_t freemem = PADDR((uintptr_t)pages + sizeof(struct Page) * npage);
++
++    for (i = 0; i < memmap->nr_map; i ++) {
++        uint64_t begin = memmap->map[i].addr, end = begin + memmap->map[i].size;
++        if (memmap->map[i].type == E820_ARM) {
++            if (begin < freemem) {
++                begin = freemem;
++            }
++            if (end > KMEMSIZE) {
++                end = KMEMSIZE;
++            }
++            if (begin < end) {
++                begin = ROUNDUP(begin, PGSIZE);
++                end = ROUNDDOWN(end, PGSIZE);
++                if (begin < end) {
++                    init_memmap(pa2page(begin), (end - begin) / PGSIZE);
++                }
++            }
++        }
++    }
++}
++
++//boot_map_segment - setup&enable the paging mechanism
++// parameters
++//  la:   linear address of this memory need to map (after x86 segment map)
++//  size: memory size
++//  pa:   physical address of this memory
++//  perm: permission of this memory  
++static void
++boot_map_segment(pde_t *pgdir, uintptr_t la, size_t size, uintptr_t pa, uint32_t perm) {
++    assert(PGOFF(la) == PGOFF(pa));
++    size_t n = ROUNDUP(size + PGOFF(la), PGSIZE) / PGSIZE;
++    la = ROUNDDOWN(la, PGSIZE);
++    pa = ROUNDDOWN(pa, PGSIZE);
++    for (; n > 0; n --, la += PGSIZE, pa += PGSIZE) {
++        pte_t *ptep = get_pte(pgdir, la, 1);
++        assert(ptep != NULL);
++        *ptep = pa | PTE_P | perm;
++    }
++}
++
++//boot_alloc_page - allocate one page using pmm->alloc_pages(1) 
++// return value: the kernel virtual address of this allocated page
++//note: this function is used to get the memory for PDT(Page Directory Table)&PT(Page Table)
++static void *
++boot_alloc_page(void) {
++    struct Page *p = alloc_page();
++    if (p == NULL) {
++        panic("boot_alloc_page failed.\n");
++    }
++    return page2kva(p);
++}
++
++//pmm_init - setup a pmm to manage physical memory, build PDT&PT to setup paging mechanism 
++//         - check the correctness of pmm & paging mechanism, print PDT&PT
+ void
+ pmm_init(void) {
++    // We've already enabled paging
++    boot_cr3 = PADDR(boot_pgdir);
++
++    //We need to alloc/free the physical memory (granularity is 4KB or other size). 
++    //So a framework of physical memory manager (struct pmm_manager)is defined in pmm.h
++    //First we should init a physical memory manager(pmm) based on the framework.
++    //Then pmm can alloc/free the physical memory. 
++    //Now the first_fit/best_fit/worst_fit/buddy_system pmm are available.
++    init_pmm_manager();
++
++    // detect physical memory space, reserve already used memory,
++    // then use pmm->init_memmap to create free page list
++    page_init();
++
++    //use pmm->check to verify the correctness of the alloc/free function in a pmm
++    check_alloc_page();
++
++    check_pgdir();
++
++    static_assert(KERNBASE % PTSIZE == 0 && KERNTOP % PTSIZE == 0);
++
++    // recursively insert boot_pgdir in itself
++    // to form a virtual page table at virtual address VPT
++    boot_pgdir[PDX(VPT)] = PADDR(boot_pgdir) | PTE_P | PTE_W;
++
++    // map all physical memory to linear memory with base linear addr KERNBASE
++    // linear_addr KERNBASE ~ KERNBASE + KMEMSIZE = phy_addr 0 ~ KMEMSIZE
++    boot_map_segment(boot_pgdir, KERNBASE, KMEMSIZE, 0, PTE_W);
++
++    // Since we are using bootloader's GDT,
++    // we should reload gdt (second time, the last time) to get user segments and the TSS
++    // map virtual_addr 0 ~ 4G = linear_addr 0 ~ 4G
++    // then set kernel stack (ss:esp) in TSS, setup TSS in gdt, load TSS
+     gdt_init();
++
++    //now the basic virtual memory map(see memalyout.h) is established.
++    //check the correctness of the basic virtual memory map.
++    check_boot_pgdir();
++
++    print_pgdir();
++
++}
++
++//get_pte - get pte and return the kernel virtual address of this pte for la
++//        - if the PT contians this pte didn't exist, alloc a page for PT
++// parameter:
++//  pgdir:  the kernel virtual base address of PDT
++//  la:     the linear address need to map
++//  create: a logical value to decide if alloc a page for PT
++// return vaule: the kernel virtual address of this pte
++pte_t *
++get_pte(pde_t *pgdir, uintptr_t la, bool create) {
++    /* LAB2 EXERCISE 2: YOUR CODE
++     *
++     * If you need to visit a physical address, please use KADDR()
++     * please read pmm.h for useful macros
++     *
++     * Maybe you want help comment, BELOW comments can help you finish the code
++     *
++     * Some Useful MACROs and DEFINEs, you can use them in below implementation.
++     * MACROs or Functions:
++     *   PDX(la) = the index of page directory entry of VIRTUAL ADDRESS la.
++     *   KADDR(pa) : takes a physical address and returns the corresponding kernel virtual address.
++     *   set_page_ref(page,1) : means the page be referenced by one time
++     *   page2pa(page): get the physical address of memory which this (struct Page *) page  manages
++     *   struct Page * alloc_page() : allocation a page
++     *   memset(void *s, char c, size_t n) : sets the first n bytes of the memory area pointed by s
++     *                                       to the specified value c.
++     * DEFINEs:
++     *   PTE_P           0x001                   // page table/directory entry flags bit : Present
++     *   PTE_W           0x002                   // page table/directory entry flags bit : Writeable
++     *   PTE_U           0x004                   // page table/directory entry flags bit : User can access
++     */
++#if 0
++    pde_t *pdep = NULL;   // (1) find page directory entry
++    if (0) {              // (2) check if entry is not present
++                          // (3) check if creating is needed, then alloc page for page table
++                          // CAUTION: this page is used for page table, not for common data page
++                          // (4) set page reference
++        uintptr_t pa = 0; // (5) get linear address of page
++                          // (6) clear page content using memset
++                          // (7) set page directory entry's permission
++    }
++    return NULL;          // (8) return page table entry
++#endif
++}
++
++//get_page - get related Page struct for linear address la using PDT pgdir
++struct Page *
++get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store) {
++    pte_t *ptep = get_pte(pgdir, la, 0);
++    if (ptep_store != NULL) {
++        *ptep_store = ptep;
++    }
++    if (ptep != NULL && *ptep & PTE_P) {
++        return pte2page(*ptep);
++    }
++    return NULL;
++}
++
++//page_remove_pte - free an Page sturct which is related linear address la
++//                - and clean(invalidate) pte which is related linear address la
++//note: PT is changed, so the TLB need to be invalidate 
++static inline void
++page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
++    /* LAB2 EXERCISE 3: YOUR CODE
++     *
++     * Please check if ptep is valid, and tlb must be manually updated if mapping is updated
++     *
++     * Maybe you want help comment, BELOW comments can help you finish the code
++     *
++     * Some Useful MACROs and DEFINEs, you can use them in below implementation.
++     * MACROs or Functions:
++     *   struct Page *page pte2page(*ptep): get the according page from the value of a ptep
++     *   free_page : free a page
++     *   page_ref_dec(page) : decrease page->ref. NOTICE: ff page->ref == 0 , then this page should be free.
++     *   tlb_invalidate(pde_t *pgdir, uintptr_t la) : Invalidate a TLB entry, but only if the page tables being
++     *                        edited are the ones currently in use by the processor.
++     * DEFINEs:
++     *   PTE_P           0x001                   // page table/directory entry flags bit : Present
++     */
++#if 0
++    if (0) {                      //(1) check if this page table entry is present
++        struct Page *page = NULL; //(2) find corresponding page to pte
++                                  //(3) decrease page reference
++                                  //(4) and free this page when page reference reachs 0
++                                  //(5) clear second page table entry
++                                  //(6) flush tlb
++    }
++#endif
++}
++
++//page_remove - free an Page which is related linear address la and has an validated pte
++void
++page_remove(pde_t *pgdir, uintptr_t la) {
++    pte_t *ptep = get_pte(pgdir, la, 0);
++    if (ptep != NULL) {
++        page_remove_pte(pgdir, la, ptep);
++    }
++}
++
++//page_insert - build the map of phy addr of an Page with the linear addr la
++// paramemters:
++//  pgdir: the kernel virtual base address of PDT
++//  page:  the Page which need to map
++//  la:    the linear address need to map
++//  perm:  the permission of this Page which is setted in related pte
++// return value: always 0
++//note: PT is changed, so the TLB need to be invalidate 
++int
++page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm) {
++    pte_t *ptep = get_pte(pgdir, la, 1);
++    if (ptep == NULL) {
++        return -E_NO_MEM;
++    }
++    page_ref_inc(page);
++    if (*ptep & PTE_P) {
++        struct Page *p = pte2page(*ptep);
++        if (p == page) {
++            page_ref_dec(page);
++        }
++        else {
++            page_remove_pte(pgdir, la, ptep);
++        }
++    }
++    *ptep = page2pa(page) | PTE_P | perm;
++    tlb_invalidate(pgdir, la);
++    return 0;
++}
++
++// invalidate a TLB entry, but only if the page tables being
++// edited are the ones currently in use by the processor.
++void
++tlb_invalidate(pde_t *pgdir, uintptr_t la) {
++    if (rcr3() == PADDR(pgdir)) {
++        invlpg((void *)la);
++    }
++}
++
++static void
++check_alloc_page(void) {
++    pmm_manager->check();
++    cprintf("check_alloc_page() succeeded!\n");
++}
++
++static void
++check_pgdir(void) {
++    assert(npage <= KMEMSIZE / PGSIZE);
++    assert(boot_pgdir != NULL && (uint32_t)PGOFF(boot_pgdir) == 0);
++    assert(get_page(boot_pgdir, 0x0, NULL) == NULL);
++
++    struct Page *p1, *p2;
++    p1 = alloc_page();
++    assert(page_insert(boot_pgdir, p1, 0x0, 0) == 0);
++
++    pte_t *ptep;
++    assert((ptep = get_pte(boot_pgdir, 0x0, 0)) != NULL);
++    assert(pte2page(*ptep) == p1);
++    assert(page_ref(p1) == 1);
++
++    ptep = &((pte_t *)KADDR(PDE_ADDR(boot_pgdir[0])))[1];
++    assert(get_pte(boot_pgdir, PGSIZE, 0) == ptep);
++
++    p2 = alloc_page();
++    assert(page_insert(boot_pgdir, p2, PGSIZE, PTE_U | PTE_W) == 0);
++    assert((ptep = get_pte(boot_pgdir, PGSIZE, 0)) != NULL);
++    assert(*ptep & PTE_U);
++    assert(*ptep & PTE_W);
++    assert(boot_pgdir[0] & PTE_U);
++    assert(page_ref(p2) == 1);
++
++    assert(page_insert(boot_pgdir, p1, PGSIZE, 0) == 0);
++    assert(page_ref(p1) == 2);
++    assert(page_ref(p2) == 0);
++    assert((ptep = get_pte(boot_pgdir, PGSIZE, 0)) != NULL);
++    assert(pte2page(*ptep) == p1);
++    assert((*ptep & PTE_U) == 0);
++
++    page_remove(boot_pgdir, 0x0);
++    assert(page_ref(p1) == 1);
++    assert(page_ref(p2) == 0);
++
++    page_remove(boot_pgdir, PGSIZE);
++    assert(page_ref(p1) == 0);
++    assert(page_ref(p2) == 0);
++
++    assert(page_ref(pde2page(boot_pgdir[0])) == 1);
++    free_page(pde2page(boot_pgdir[0]));
++    boot_pgdir[0] = 0;
++
++    cprintf("check_pgdir() succeeded!\n");
++}
++
++static void
++check_boot_pgdir(void) {
++    pte_t *ptep;
++    int i;
++    for (i = 0; i < npage; i += PGSIZE) {
++        assert((ptep = get_pte(boot_pgdir, (uintptr_t)KADDR(i), 0)) != NULL);
++        assert(PTE_ADDR(*ptep) == i);
++    }
++
++    assert(PDE_ADDR(boot_pgdir[PDX(VPT)]) == PADDR(boot_pgdir));
++
++    assert(boot_pgdir[0] == 0);
++
++    struct Page *p;
++    p = alloc_page();
++    assert(page_insert(boot_pgdir, p, 0x100, PTE_W) == 0);
++    assert(page_ref(p) == 1);
++    assert(page_insert(boot_pgdir, p, 0x100 + PGSIZE, PTE_W) == 0);
++    assert(page_ref(p) == 2);
++
++    const char *str = "ucore: Hello world!!";
++    strcpy((void *)0x100, str);
++    assert(strcmp((void *)0x100, (void *)(0x100 + PGSIZE)) == 0);
++
++    *(char *)(page2kva(p) + 0x100) = '\0';
++    assert(strlen((const char *)0x100) == 0);
++
++    free_page(p);
++    free_page(pde2page(boot_pgdir[0]));
++    boot_pgdir[0] = 0;
++
++    cprintf("check_boot_pgdir() succeeded!\n");
++}
++
++//perm2str - use string 'u,r,w,-' to present the permission
++static const char *
++perm2str(int perm) {
++    static char str[4];
++    str[0] = (perm & PTE_U) ? 'u' : '-';
++    str[1] = 'r';
++    str[2] = (perm & PTE_W) ? 'w' : '-';
++    str[3] = '\0';
++    return str;
++}
++
++//get_pgtable_items - In [left, right] range of PDT or PT, find a continuous linear addr space
++//                  - (left_store*X_SIZE~right_store*X_SIZE) for PDT or PT
++//                  - X_SIZE=PTSIZE=4M, if PDT; X_SIZE=PGSIZE=4K, if PT
++// paramemters:
++//  left:        no use ???
++//  right:       the high side of table's range
++//  start:       the low side of table's range
++//  table:       the beginning addr of table
++//  left_store:  the pointer of the high side of table's next range
++//  right_store: the pointer of the low side of table's next range
++// return value: 0 - not a invalid item range, perm - a valid item range with perm permission 
++static int
++get_pgtable_items(size_t left, size_t right, size_t start, uintptr_t *table, size_t *left_store, size_t *right_store) {
++    if (start >= right) {
++        return 0;
++    }
++    while (start < right && !(table[start] & PTE_P)) {
++        start ++;
++    }
++    if (start < right) {
++        if (left_store != NULL) {
++            *left_store = start;
++        }
++        int perm = (table[start ++] & PTE_USER);
++        while (start < right && (table[start] & PTE_USER) == perm) {
++            start ++;
++        }
++        if (right_store != NULL) {
++            *right_store = start;
++        }
++        return perm;
++    }
++    return 0;
++}
++
++//print_pgdir - print the PDT&PT
++void
++print_pgdir(void) {
++    cprintf("-------------------- BEGIN --------------------\n");
++    size_t left, right = 0, perm;
++    while ((perm = get_pgtable_items(0, NPDEENTRY, right, vpd, &left, &right)) != 0) {
++        cprintf("PDE(%03x) %08x-%08x %08x %s\n", right - left,
++                left * PTSIZE, right * PTSIZE, (right - left) * PTSIZE, perm2str(perm));
++        size_t l, r = left * NPTEENTRY;
++        while ((perm = get_pgtable_items(left * NPTEENTRY, right * NPTEENTRY, r, vpt, &l, &r)) != 0) {
++            cprintf("  |-- PTE(%05x) %08x-%08x %08x %s\n", r - l,
++                    l * PGSIZE, r * PGSIZE, (r - l) * PGSIZE, perm2str(perm));
++        }
++    }
++    cprintf("--------------------- END ---------------------\n");
+ }
+ 
+diff -ruN lab1/kern/mm/pmm.h lab2/kern/mm/pmm.h
+--- lab1/kern/mm/pmm.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/mm/pmm.h	2021-11-08 18:05:44.000000000 +0600
+@@ -1,7 +1,143 @@
+ #ifndef __KERN_MM_PMM_H__
+ #define __KERN_MM_PMM_H__
+ 
++#include <defs.h>
++#include <mmu.h>
++#include <memlayout.h>
++#include <atomic.h>
++#include <assert.h>
++
++// pmm_manager is a physical memory management class. A special pmm manager - XXX_pmm_manager
++// only needs to implement the methods in pmm_manager class, then XXX_pmm_manager can be used
++// by ucore to manage the total physical memory space.
++struct pmm_manager {
++    const char *name;                                 // XXX_pmm_manager's name
++    void (*init)(void);                               // initialize internal description&management data structure
++                                                      // (free block list, number of free block) of XXX_pmm_manager 
++    void (*init_memmap)(struct Page *base, size_t n); // setup description&management data structcure according to
++                                                      // the initial free physical memory space 
++    struct Page *(*alloc_pages)(size_t n);            // allocate >=n pages, depend on the allocation algorithm 
++    void (*free_pages)(struct Page *base, size_t n);  // free >=n pages with "base" addr of Page descriptor structures(memlayout.h)
++    size_t (*nr_free_pages)(void);                    // return the number of free pages 
++    void (*check)(void);                              // check the correctness of XXX_pmm_manager 
++};
++
++extern const struct pmm_manager *pmm_manager;
++extern pde_t *boot_pgdir;
++extern uintptr_t boot_cr3;
++
+ void pmm_init(void);
+ 
++struct Page *alloc_pages(size_t n);
++void free_pages(struct Page *base, size_t n);
++size_t nr_free_pages(void);
++
++#define alloc_page() alloc_pages(1)
++#define free_page(page) free_pages(page, 1)
++
++pte_t *get_pte(pde_t *pgdir, uintptr_t la, bool create);
++struct Page *get_page(pde_t *pgdir, uintptr_t la, pte_t **ptep_store);
++void page_remove(pde_t *pgdir, uintptr_t la);
++int page_insert(pde_t *pgdir, struct Page *page, uintptr_t la, uint32_t perm);
++
++void load_esp0(uintptr_t esp0);
++void tlb_invalidate(pde_t *pgdir, uintptr_t la);
++
++void print_pgdir(void);
++
++/* *
++ * PADDR - takes a kernel virtual address (an address that points above KERNBASE),
++ * where the machine's maximum 256MB of physical memory is mapped and returns the
++ * corresponding physical address.  It panics if you pass it a non-kernel virtual address.
++ * */
++#define PADDR(kva) ({                                                   \
++            uintptr_t __m_kva = (uintptr_t)(kva);                       \
++            if (__m_kva < KERNBASE) {                                   \
++                panic("PADDR called with invalid kva %08lx", __m_kva);  \
++            }                                                           \
++            __m_kva - KERNBASE;                                         \
++        })
++
++/* *
++ * KADDR - takes a physical address and returns the corresponding kernel virtual
++ * address. It panics if you pass an invalid physical address.
++ * */
++#define KADDR(pa) ({                                                    \
++            uintptr_t __m_pa = (pa);                                    \
++            size_t __m_ppn = PPN(__m_pa);                               \
++            if (__m_ppn >= npage) {                                     \
++                panic("KADDR called with invalid pa %08lx", __m_pa);    \
++            }                                                           \
++            (void *) (__m_pa + KERNBASE);                               \
++        })
++
++extern struct Page *pages;
++extern size_t npage;
++
++static inline ppn_t
++page2ppn(struct Page *page) {
++    return page - pages;
++}
++
++static inline uintptr_t
++page2pa(struct Page *page) {
++    return page2ppn(page) << PGSHIFT;
++}
++
++static inline struct Page *
++pa2page(uintptr_t pa) {
++    if (PPN(pa) >= npage) {
++        panic("pa2page called with invalid pa");
++    }
++    return &pages[PPN(pa)];
++}
++
++static inline void *
++page2kva(struct Page *page) {
++    return KADDR(page2pa(page));
++}
++
++static inline struct Page *
++kva2page(void *kva) {
++    return pa2page(PADDR(kva));
++}
++
++static inline struct Page *
++pte2page(pte_t pte) {
++    if (!(pte & PTE_P)) {
++        panic("pte2page called with invalid pte");
++    }
++    return pa2page(PTE_ADDR(pte));
++}
++
++static inline struct Page *
++pde2page(pde_t pde) {
++    return pa2page(PDE_ADDR(pde));
++}
++
++static inline int
++page_ref(struct Page *page) {
++    return page->ref;
++}
++
++static inline void
++set_page_ref(struct Page *page, int val) {
++    page->ref = val;
++}
++
++static inline int
++page_ref_inc(struct Page *page) {
++    page->ref += 1;
++    return page->ref;
++}
++
++static inline int
++page_ref_dec(struct Page *page) {
++    page->ref -= 1;
++    return page->ref;
++}
++
++extern char bootstack[], bootstacktop[];
++
+ #endif /* !__KERN_MM_PMM_H__ */
+ 
+diff -ruN lab1/kern/sync/sync.h lab2/kern/sync/sync.h
+--- lab1/kern/sync/sync.h	1970-01-01 06:00:00.000000000 +0600
++++ lab2/kern/sync/sync.h	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,28 @@
++#ifndef __KERN_SYNC_SYNC_H__
++#define __KERN_SYNC_SYNC_H__
++
++#include <x86.h>
++#include <intr.h>
++#include <mmu.h>
++
++static inline bool
++__intr_save(void) {
++    if (read_eflags() & FL_IF) {
++        intr_disable();
++        return 1;
++    }
++    return 0;
++}
++
++static inline void
++__intr_restore(bool flag) {
++    if (flag) {
++        intr_enable();
++    }
++}
++
++#define local_intr_save(x)      do { x = __intr_save(); } while (0)
++#define local_intr_restore(x)   __intr_restore(x);
++
++#endif /* !__KERN_SYNC_SYNC_H__ */
++
+diff -ruN lab1/kern/trap/trap.c lab2/kern/trap/trap.c
+--- lab1/kern/trap/trap.c	2021-11-21 12:20:09.000000000 +0600
++++ lab2/kern/trap/trap.c	2021-11-08 18:05:44.000000000 +0600
+@@ -31,8 +31,6 @@
+     sizeof(idt) - 1, (uintptr_t)idt
+ };
+ 
+-struct trapframe *switchu2k;
+-struct trapframe switchk2u;
+ /* idt_init - initialize IDT to each of the entry points in kern/trap/vectors.S */
+ void
+ idt_init(void) {
+@@ -48,19 +46,6 @@
+       *     You don't know the meaning of this instruction? just google it! and check the libs/x86.h to know more.
+       *     Notice: the argument of lidt is idt_pd. try to find it!
+       */
+-    // __vectors定义于vector.S中
+-    extern uintptr_t __vectors[];
+-    int i;
+-    for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++)
+-      // 目标idt项为idt[i]
+-      // 该idt项为内核代码，所以使用GD_KTEXT段选择子
+-      // 中断处理程序的入口地址存放于__vectors[i]
+-      // 特权级为DPL_KERNEL
+-      SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+-    // 设置从用户态转为内核态的中断的特权级为DPL_USER
+-    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+-    // 加载该IDT
+-    lidt(&idt_pd);
+ }
+ 
+ static const char *
+@@ -162,9 +147,6 @@
+          * (2) Every TICK_NUM cycle, you can print some info using a funciton, such as print_ticks().
+          * (3) Too Simple? Yes, I think so!
+          */
+-        ticks++;
+-        if(ticks % TICK_NUM == 0)
+-            print_ticks();
+         break;
+     case IRQ_OFFSET + IRQ_COM1:
+         c = cons_getc();
+@@ -173,49 +155,12 @@
+     case IRQ_OFFSET + IRQ_KBD:
+         c = cons_getc();
+         cprintf("kbd [%03d] %c\n", c, c);
+-        if(c == '0')
+-        {
+-            if (tf->tf_cs != KERNEL_CS) {
+-                cprintf("+++ switch to  kernel  mode +++\n");
+-                tf->tf_cs = KERNEL_CS;
+-                tf->tf_ds = tf->tf_es = KERNEL_DS;
+-                tf->tf_eflags &= ~FL_IOPL_MASK;
+-                switchu2k = (struct trapframe *)(tf->tf_esp - (sizeof(struct trapframe) - 8));
+-                memmove(switchu2k, tf, sizeof(struct trapframe) - 8);
+-                *((uint32_t *)tf - 1) = (uint32_t)switchu2k;
+-            }
+-        }
+-        else if(c == '3')
+-        {
+-              if (tf->tf_cs != USER_CS) {
+-                cprintf("+++ switch to  user  mode +++\n");
+-                switchk2u = *tf;
+-                switchk2u.tf_cs = USER_CS;
+-                switchk2u.tf_ds = switchk2u.tf_es = switchk2u.tf_ss = USER_DS;
+-                switchk2u.tf_esp = (uint32_t)tf + sizeof(struct trapframe) - 8;
+-                switchk2u.tf_eflags |= FL_IOPL_MASK;
+-                *((uint32_t *)tf - 1) = (uint32_t)&switchk2u;
+-            }
+-        }
+         break;
+     //LAB1 CHALLENGE 1 : YOUR CODE you should modify below codes.
+     case T_SWITCH_TOU:
+-        if (tf->tf_cs != USER_CS) 
+-        {
+-            tf->tf_cs = USER_CS;
+-            tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+-            tf->tf_eflags |= FL_IOPL_MASK;
+-        }
+-        break;
+     case T_SWITCH_TOK:
+-        if (tf->tf_cs != KERNEL_CS) 
+-        {
+-            tf->tf_cs = KERNEL_CS;
+-            tf->tf_ds = tf->tf_es = KERNEL_DS;
+-            tf->tf_eflags &= ~FL_IOPL_MASK;
+-        }
++        panic("T_SWITCH_** ??\n");
+         break;
+-
+     case IRQ_OFFSET + IRQ_IDE1:
+     case IRQ_OFFSET + IRQ_IDE2:
+         /* do nothing */
+diff -ruN lab1/kern/trap/trap.h lab2/kern/trap/trap.h
+--- lab1/kern/trap/trap.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/kern/trap/trap.h	2021-11-08 18:05:44.000000000 +0600
+@@ -6,39 +6,39 @@
+ /* Trap Numbers */
+ 
+ /* Processor-defined: */
+-#define T_DIVIDE                0    // divide error
+-#define T_DEBUG                    1    // debug exception
+-#define T_NMI                    2    // non-maskable interrupt
+-#define T_BRKPT                    3    // breakpoint
+-#define T_OFLOW                    4    // overflow
+-#define T_BOUND                    5    // bounds check
+-#define T_ILLOP                    6    // illegal opcode
+-#define T_DEVICE                7    // device not available
+-#define T_DBLFLT                8    // double fault
+-// #define T_COPROC                9    // reserved (not used since 486)
+-#define T_TSS                    10    // invalid task switch segment
+-#define T_SEGNP                    11    // segment not present
+-#define T_STACK                    12    // stack exception
+-#define T_GPFLT                    13    // general protection fault
+-#define T_PGFLT                    14    // page fault
+-// #define T_RES                15    // reserved
+-#define T_FPERR                    16    // floating point error
+-#define T_ALIGN                    17    // aligment check
+-#define T_MCHK                    18    // machine check
+-#define T_SIMDERR                19    // SIMD floating point error
++#define T_DIVIDE                0   // divide error
++#define T_DEBUG                 1   // debug exception
++#define T_NMI                   2   // non-maskable interrupt
++#define T_BRKPT                 3   // breakpoint
++#define T_OFLOW                 4   // overflow
++#define T_BOUND                 5   // bounds check
++#define T_ILLOP                 6   // illegal opcode
++#define T_DEVICE                7   // device not available
++#define T_DBLFLT                8   // double fault
++// #define T_COPROC             9   // reserved (not used since 486)
++#define T_TSS                   10  // invalid task switch segment
++#define T_SEGNP                 11  // segment not present
++#define T_STACK                 12  // stack exception
++#define T_GPFLT                 13  // general protection fault
++#define T_PGFLT                 14  // page fault
++// #define T_RES                15  // reserved
++#define T_FPERR                 16  // floating point error
++#define T_ALIGN                 17  // aligment check
++#define T_MCHK                  18  // machine check
++#define T_SIMDERR               19  // SIMD floating point error
+ 
+ #define T_SYSCALL               0x80 // SYSCALL, ONLY FOR THIS PROJ
+ 
+ /* Hardware IRQ numbers. We receive these as (IRQ_OFFSET + IRQ_xx) */
+-#define IRQ_OFFSET                32    // IRQ 0 corresponds to int IRQ_OFFSET
++#define IRQ_OFFSET              32  // IRQ 0 corresponds to int IRQ_OFFSET
+ 
+-#define IRQ_TIMER                0
+-#define IRQ_KBD                    1
++#define IRQ_TIMER               0
++#define IRQ_KBD                 1
+ #define IRQ_COM1                4
+ #define IRQ_IDE1                14
+ #define IRQ_IDE2                15
+-#define IRQ_ERROR                19
+-#define IRQ_SPURIOUS                31
++#define IRQ_ERROR               19
++#define IRQ_SPURIOUS            31
+ 
+ /* *
+  * These are arbitrarily chosen, but with care not to overlap
+@@ -52,7 +52,7 @@
+     uint32_t reg_edi;
+     uint32_t reg_esi;
+     uint32_t reg_ebp;
+-    uint32_t reg_oesp;            /* Useless */
++    uint32_t reg_oesp;          /* Useless */
+     uint32_t reg_ebx;
+     uint32_t reg_edx;
+     uint32_t reg_ecx;
+diff -ruN lab1/libs/atomic.h lab2/libs/atomic.h
+--- lab1/libs/atomic.h	1970-01-01 06:00:00.000000000 +0600
++++ lab2/libs/atomic.h	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,57 @@
++#ifndef __LIBS_ATOMIC_H__
++#define __LIBS_ATOMIC_H__
++
++/* Atomic operations that C can't guarantee us. Useful for resource counting etc.. */
++
++static inline void set_bit(int nr, volatile void *addr) __attribute__((always_inline));
++static inline void clear_bit(int nr, volatile void *addr) __attribute__((always_inline));
++static inline void change_bit(int nr, volatile void *addr) __attribute__((always_inline));
++static inline bool test_bit(int nr, volatile void *addr) __attribute__((always_inline));
++
++/* *
++ * set_bit - Atomically set a bit in memory
++ * @nr:     the bit to set
++ * @addr:   the address to start counting from
++ *
++ * Note that @nr may be almost arbitrarily large; this function is not
++ * restricted to acting on a single-word quantity.
++ * */
++static inline void
++set_bit(int nr, volatile void *addr) {
++    asm volatile ("btsl %1, %0" :"=m" (*(volatile long *)addr) : "Ir" (nr));
++}
++
++/* *
++ * clear_bit - Atomically clears a bit in memory
++ * @nr:     the bit to clear
++ * @addr:   the address to start counting from
++ * */
++static inline void
++clear_bit(int nr, volatile void *addr) {
++    asm volatile ("btrl %1, %0" :"=m" (*(volatile long *)addr) : "Ir" (nr));
++}
++
++/* *
++ * change_bit - Atomically toggle a bit in memory
++ * @nr:     the bit to change
++ * @addr:   the address to start counting from
++ * */
++static inline void
++change_bit(int nr, volatile void *addr) {
++    asm volatile ("btcl %1, %0" :"=m" (*(volatile long *)addr) : "Ir" (nr));
++}
++
++/* *
++ * test_bit - Determine whether a bit is set
++ * @nr:     the bit to test
++ * @addr:   the address to count from
++ * */
++static inline bool
++test_bit(int nr, volatile void *addr) {
++    int oldbit;
++    asm volatile ("btl %2, %1; sbbl %0,%0" : "=r" (oldbit) : "m" (*(volatile long *)addr), "Ir" (nr));
++    return oldbit != 0;
++}
++
++#endif /* !__LIBS_ATOMIC_H__ */
++
+diff -ruN lab1/libs/elf.h lab2/libs/elf.h
+--- lab1/libs/elf.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/libs/elf.h	2021-11-08 18:05:44.000000000 +0600
+@@ -3,7 +3,7 @@
+ 
+ #include <defs.h>
+ 
+-#define ELF_MAGIC    0x464C457FU            // "\x7FELF" in little endian
++#define ELF_MAGIC   0x464C457FU         // "\x7FELF" in little endian
+ 
+ /* file header */
+ struct elfhdr {
+diff -ruN lab1/libs/error.h lab2/libs/error.h
+--- lab1/libs/error.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/libs/error.h	2021-11-08 18:05:44.000000000 +0600
+@@ -2,12 +2,12 @@
+ #define __LIBS_ERROR_H__
+ 
+ /* kernel error codes -- keep in sync with list in lib/printfmt.c */
+-#define E_UNSPECIFIED        1    // Unspecified or unknown problem
+-#define E_BAD_PROC            2    // Process doesn't exist or otherwise
+-#define E_INVAL                3    // Invalid parameter
+-#define E_NO_MEM            4    // Request failed due to memory shortage
+-#define E_NO_FREE_PROC        5    // Attempt to create a new process beyond
+-#define E_FAULT                6    // Memory fault
++#define E_UNSPECIFIED       1   // Unspecified or unknown problem
++#define E_BAD_PROC          2   // Process doesn't exist or otherwise
++#define E_INVAL             3   // Invalid parameter
++#define E_NO_MEM            4   // Request failed due to memory shortage
++#define E_NO_FREE_PROC      5   // Attempt to create a new process beyond
++#define E_FAULT             6   // Memory fault
+ 
+ /* the maximum allowed */
+ #define MAXERROR            6
+diff -ruN lab1/libs/list.h lab2/libs/list.h
+--- lab1/libs/list.h	1970-01-01 06:00:00.000000000 +0600
++++ lab2/libs/list.h	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,163 @@
++#ifndef __LIBS_LIST_H__
++#define __LIBS_LIST_H__
++
++#ifndef __ASSEMBLER__
++
++#include <defs.h>
++
++/* *
++ * Simple doubly linked list implementation.
++ *
++ * Some of the internal functions ("__xxx") are useful when manipulating
++ * whole lists rather than single entries, as sometimes we already know
++ * the next/prev entries and we can generate better code by using them
++ * directly rather than using the generic single-entry routines.
++ * */
++
++struct list_entry {
++    struct list_entry *prev, *next;
++};
++
++typedef struct list_entry list_entry_t;
++
++static inline void list_init(list_entry_t *elm) __attribute__((always_inline));
++static inline void list_add(list_entry_t *listelm, list_entry_t *elm) __attribute__((always_inline));
++static inline void list_add_before(list_entry_t *listelm, list_entry_t *elm) __attribute__((always_inline));
++static inline void list_add_after(list_entry_t *listelm, list_entry_t *elm) __attribute__((always_inline));
++static inline void list_del(list_entry_t *listelm) __attribute__((always_inline));
++static inline void list_del_init(list_entry_t *listelm) __attribute__((always_inline));
++static inline bool list_empty(list_entry_t *list) __attribute__((always_inline));
++static inline list_entry_t *list_next(list_entry_t *listelm) __attribute__((always_inline));
++static inline list_entry_t *list_prev(list_entry_t *listelm) __attribute__((always_inline));
++
++static inline void __list_add(list_entry_t *elm, list_entry_t *prev, list_entry_t *next) __attribute__((always_inline));
++static inline void __list_del(list_entry_t *prev, list_entry_t *next) __attribute__((always_inline));
++
++/* *
++ * list_init - initialize a new entry
++ * @elm:        new entry to be initialized
++ * */
++static inline void
++list_init(list_entry_t *elm) {
++    elm->prev = elm->next = elm;
++}
++
++/* *
++ * list_add - add a new entry
++ * @listelm:    list head to add after
++ * @elm:        new entry to be added
++ *
++ * Insert the new element @elm *after* the element @listelm which
++ * is already in the list.
++ * */
++static inline void
++list_add(list_entry_t *listelm, list_entry_t *elm) {
++    list_add_after(listelm, elm);
++}
++
++/* *
++ * list_add_before - add a new entry
++ * @listelm:    list head to add before
++ * @elm:        new entry to be added
++ *
++ * Insert the new element @elm *before* the element @listelm which
++ * is already in the list.
++ * */
++static inline void
++list_add_before(list_entry_t *listelm, list_entry_t *elm) {
++    __list_add(elm, listelm->prev, listelm);
++}
++
++/* *
++ * list_add_after - add a new entry
++ * @listelm:    list head to add after
++ * @elm:        new entry to be added
++ *
++ * Insert the new element @elm *after* the element @listelm which
++ * is already in the list.
++ * */
++static inline void
++list_add_after(list_entry_t *listelm, list_entry_t *elm) {
++    __list_add(elm, listelm, listelm->next);
++}
++
++/* *
++ * list_del - deletes entry from list
++ * @listelm:    the element to delete from the list
++ *
++ * Note: list_empty() on @listelm does not return true after this, the entry is
++ * in an undefined state.
++ * */
++static inline void
++list_del(list_entry_t *listelm) {
++    __list_del(listelm->prev, listelm->next);
++}
++
++/* *
++ * list_del_init - deletes entry from list and reinitialize it.
++ * @listelm:    the element to delete from the list.
++ *
++ * Note: list_empty() on @listelm returns true after this.
++ * */
++static inline void
++list_del_init(list_entry_t *listelm) {
++    list_del(listelm);
++    list_init(listelm);
++}
++
++/* *
++ * list_empty - tests whether a list is empty
++ * @list:       the list to test.
++ * */
++static inline bool
++list_empty(list_entry_t *list) {
++    return list->next == list;
++}
++
++/* *
++ * list_next - get the next entry
++ * @listelm:    the list head
++ **/
++static inline list_entry_t *
++list_next(list_entry_t *listelm) {
++    return listelm->next;
++}
++
++/* *
++ * list_prev - get the previous entry
++ * @listelm:    the list head
++ **/
++static inline list_entry_t *
++list_prev(list_entry_t *listelm) {
++    return listelm->prev;
++}
++
++/* *
++ * Insert a new entry between two known consecutive entries.
++ *
++ * This is only for internal list manipulation where we know
++ * the prev/next entries already!
++ * */
++static inline void
++__list_add(list_entry_t *elm, list_entry_t *prev, list_entry_t *next) {
++    prev->next = next->prev = elm;
++    elm->next = next;
++    elm->prev = prev;
++}
++
++/* *
++ * Delete a list entry by making the prev/next entries point to each other.
++ *
++ * This is only for internal list manipulation where we know
++ * the prev/next entries already!
++ * */
++static inline void
++__list_del(list_entry_t *prev, list_entry_t *next) {
++    prev->next = next;
++    next->prev = prev;
++}
++
++#endif /* !__ASSEMBLER__ */
++
++#endif /* !__LIBS_LIST_H__ */
++
+diff -ruN lab1/libs/printfmt.c lab2/libs/printfmt.c
+--- lab1/libs/printfmt.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/libs/printfmt.c	2021-11-08 18:05:44.000000000 +0600
+@@ -15,23 +15,23 @@
+  * */
+ 
+ static const char * const error_string[MAXERROR + 1] = {
+-    [0]                        NULL,
+-    [E_UNSPECIFIED]            "unspecified error",
++    [0]                     NULL,
++    [E_UNSPECIFIED]         "unspecified error",
+     [E_BAD_PROC]            "bad process",
+-    [E_INVAL]                "invalid parameter",
+-    [E_NO_MEM]                "out of memory",
++    [E_INVAL]               "invalid parameter",
++    [E_NO_MEM]              "out of memory",
+     [E_NO_FREE_PROC]        "out of processes",
+-    [E_FAULT]                "segmentation fault",
++    [E_FAULT]               "segmentation fault",
+ };
+ 
+ /* *
+  * printnum - print a number (base <= 16) in reverse order
+- * @putch:        specified putch function, print a single character
+- * @putdat:        used by @putch function
++ * @putch:      specified putch function, print a single character
++ * @putdat:     used by @putch function
+  * @num:        the number will be printed
+- * @base:        base for print, must be in [1, 16]
+- * @width:         maximum number of digits, if the actual width is less than @width, use @padc instead
+- * @padc:        character that padded on the left if the actual width is less than @width
++ * @base:       base for print, must be in [1, 16]
++ * @width:      maximum number of digits, if the actual width is less than @width, use @padc instead
++ * @padc:       character that padded on the left if the actual width is less than @width
+  * */
+ static void
+ printnum(void (*putch)(int, void*), void *putdat,
+@@ -53,8 +53,8 @@
+ 
+ /* *
+  * getuint - get an unsigned int of various possible sizes from a varargs list
+- * @ap:            a varargs list pointer
+- * @lflag:        determines the size of the vararg that @ap points to
++ * @ap:         a varargs list pointer
++ * @lflag:      determines the size of the vararg that @ap points to
+  * */
+ static unsigned long long
+ getuint(va_list *ap, int lflag) {
+@@ -71,8 +71,8 @@
+ 
+ /* *
+  * getint - same as getuint but signed, we can't use getuint because of sign extension
+- * @ap:            a varargs list pointer
+- * @lflag:        determines the size of the vararg that @ap points to
++ * @ap:         a varargs list pointer
++ * @lflag:      determines the size of the vararg that @ap points to
+  * */
+ static long long
+ getint(va_list *ap, int lflag) {
+@@ -89,8 +89,8 @@
+ 
+ /* *
+  * printfmt - format a string and print it by using putch
+- * @putch:        specified putch function, print a single character
+- * @putdat:        used by @putch function
++ * @putch:      specified putch function, print a single character
++ * @putdat:     used by @putch function
+  * @fmt:        the format string to use
+  * */
+ void
+@@ -105,10 +105,10 @@
+ /* *
+  * vprintfmt - format a string and print it by using putch, it's called with a va_list
+  * instead of a variable number of arguments
+- * @putch:        specified putch function, print a single character
+- * @putdat:        used by @putch function
++ * @putch:      specified putch function, print a single character
++ * @putdat:     used by @putch function
+  * @fmt:        the format string to use
+- * @ap:            arguments for the format string
++ * @ap:         arguments for the format string
+  *
+  * Call this function if you are already dealing with a va_list.
+  * Or you probably want printfmt() instead.
+@@ -277,15 +277,15 @@
+ 
+ /* sprintbuf is used to save enough information of a buffer */
+ struct sprintbuf {
+-    char *buf;            // address pointer points to the first unused memory
+-    char *ebuf;            // points the end of the buffer
++    char *buf;          // address pointer points to the first unused memory
++    char *ebuf;         // points the end of the buffer
+     int cnt;            // the number of characters that have been placed in this buffer
+ };
+ 
+ /* *
+  * sprintputch - 'print' a single character in a buffer
+- * @ch:            the character will be printed
+- * @b:            the buffer to place the character @ch
++ * @ch:         the character will be printed
++ * @b:          the buffer to place the character @ch
+  * */
+ static void
+ sprintputch(int ch, struct sprintbuf *b) {
+@@ -298,7 +298,7 @@
+ /* *
+  * snprintf - format a string and place it in a buffer
+  * @str:        the buffer to place the result into
+- * @size:        the size of buffer, including the trailing null space
++ * @size:       the size of buffer, including the trailing null space
+  * @fmt:        the format string to use
+  * */
+ int
+@@ -315,9 +315,9 @@
+  * vsnprintf - format a string and place it in a buffer, it's called with a va_list
+  * instead of a variable number of arguments
+  * @str:        the buffer to place the result into
+- * @size:        the size of buffer, including the trailing null space
++ * @size:       the size of buffer, including the trailing null space
+  * @fmt:        the format string to use
+- * @ap:            arguments for the format string
++ * @ap:         arguments for the format string
+  *
+  * The return value is the number of characters which would be generated for the
+  * given input, excluding the trailing '\0'.
+diff -ruN lab1/libs/string.c lab2/libs/string.c
+--- lab1/libs/string.c	2021-11-08 18:05:44.000000000 +0600
++++ lab2/libs/string.c	2021-11-08 18:05:44.000000000 +0600
+@@ -4,7 +4,7 @@
+ /* *
+  * strlen - calculate the length of the string @s, not including
+  * the terminating '\0' character.
+- * @s:        the input string
++ * @s:      the input string
+  *
+  * The strlen() function returns the length of string @s.
+  * */
+@@ -20,7 +20,7 @@
+ /* *
+  * strnlen - calculate the length of the string @s, not including
+  * the terminating '\0' char acter, but at most @len.
+- * @s:        the input string
++ * @s:      the input string
+  * @len:    the max-length that function will scan
+  *
+  * Note that, this function looks only at the first @len characters
+@@ -87,8 +87,8 @@
+ 
+ /* *
+  * strcmp - compares the string @s1 and @s2
+- * @s1:        string to be compared
+- * @s2:        string to be compared
++ * @s1:     string to be compared
++ * @s2:     string to be compared
+  *
+  * This function starts comparing the first character of each string. If
+  * they are equal to each other, it continues with the following pairs until
+@@ -114,9 +114,9 @@
+ 
+ /* *
+  * strncmp - compares up to @n characters of the string @s1 to those of the string @s2
+- * @s1:        string to be compared
+- * @s2:        string to be compared
+- * @n:        maximum number of characters to compare
++ * @s1:     string to be compared
++ * @s2:     string to be compared
++ * @n:      maximum number of characters to compare
+  *
+  * This function starts comparing the first character of each string. If
+  * they are equal to each other, it continues with the following pairs until
+@@ -133,8 +133,8 @@
+ 
+ /* *
+  * strchr - locates first occurrence of character in string
+- * @s:        the input string
+- * @c:        character to be located
++ * @s:      the input string
++ * @c:      character to be located
+  *
+  * The strchr() function returns a pointer to the first occurrence of
+  * character in @s. If the value is not found, the function returns 'NULL'.
+@@ -152,8 +152,8 @@
+ 
+ /* *
+  * strfind - locates first occurrence of character in string
+- * @s:        the input string
+- * @c:        character to be located
++ * @s:      the input string
++ * @c:      character to be located
+  *
+  * The strfind() function is like strchr() except that if @c is
+  * not found in @s, then it returns a pointer to the null byte at the
+@@ -172,11 +172,11 @@
+ 
+ /* *
+  * strtol - converts string to long integer
+- * @s:        the input string that contains the representation of an integer number
+- * @endptr:    reference to an object of type char *, whose value is set by the
+- *             function to the next character in @s after the numerical value. This
+- *             parameter can also be a null pointer, in which case it is not used.
+- * @base:    x
++ * @s:      the input string that contains the representation of an integer number
++ * @endptr: reference to an object of type char *, whose value is set by the
++ *          function to the next character in @s after the numerical value. This
++ *          parameter can also be a null pointer, in which case it is not used.
++ * @base:   x
+  *
+  * The function first discards as many whitespace characters as necessary until
+  * the first non-whitespace character is found. Then, starting from this character,
+@@ -261,9 +261,9 @@
+ /* *
+  * memset - sets the first @n bytes of the memory area pointed by @s
+  * to the specified value @c.
+- * @s:        pointer the the memory area to fill
+- * @c:        value to set
+- * @n:        number of bytes to be set to the value
++ * @s:      pointer the the memory area to fill
++ * @c:      value to set
++ * @n:      number of bytes to be set to the value
+  *
+  * The memset() function returns @s.
+  * */
+@@ -283,9 +283,9 @@
+ /* *
+  * memmove - copies the values of @n bytes from the location pointed by @src to
+  * the memory area pointed by @dst. @src and @dst are allowed to overlap.
+- * @dst        pointer to the destination array where the content is to be copied
+- * @src        pointer to the source of data to by copied
+- * @n:        number of bytes to copy
++ * @dst     pointer to the destination array where the content is to be copied
++ * @src     pointer to the source of data to by copied
++ * @n:      number of bytes to copy
+  *
+  * The memmove() function returns @dst.
+  * */
+@@ -313,9 +313,9 @@
+ /* *
+  * memcpy - copies the value of @n bytes from the location pointed by @src to
+  * the memory area pointed by @dst.
+- * @dst        pointer to the destination array where the content is to be copied
+- * @src        pointer to the source of data to by copied
+- * @n:        number of bytes to copy
++ * @dst     pointer to the destination array where the content is to be copied
++ * @src     pointer to the source of data to by copied
++ * @n:      number of bytes to copy
+  *
+  * The memcpy() returns @dst.
+  *
+@@ -340,9 +340,9 @@
+ 
+ /* *
+  * memcmp - compares two blocks of memory
+- * @v1:        pointer to block of memory
+- * @v2:        pointer to block of memory
+- * @n:        number of bytes to compare
++ * @v1:     pointer to block of memory
++ * @v2:     pointer to block of memory
++ * @n:      number of bytes to compare
+  *
+  * The memcmp() functions returns an integral value indicating the
+  * relationship between the content of the memory blocks:
+diff -ruN lab1/libs/x86.h lab2/libs/x86.h
+--- lab1/libs/x86.h	2021-11-08 18:05:44.000000000 +0600
++++ lab2/libs/x86.h	2021-11-08 18:05:44.000000000 +0600
+@@ -3,63 +3,88 @@
+ 
+ #include <defs.h>
+ 
+-#define do_div(n, base) ({                                        \
+-    unsigned long __upper, __low, __high, __mod, __base;        \
+-    __base = (base);                                            \
+-    asm("" : "=a" (__low), "=d" (__high) : "A" (n));            \
+-    __upper = __high;                                            \
+-    if (__high != 0) {                                            \
+-        __upper = __high % __base;                                \
+-        __high = __high / __base;                                \
+-    }                                                            \
+-    asm("divl %2" : "=a" (__low), "=d" (__mod)                    \
+-        : "rm" (__base), "0" (__low), "1" (__upper));            \
+-    asm("" : "=A" (n) : "a" (__low), "d" (__high));                \
+-    __mod;                                                        \
+- })
++#define do_div(n, base) ({                                          \
++            unsigned long __upper, __low, __high, __mod, __base;    \
++            __base = (base);                                        \
++            asm ("" : "=a" (__low), "=d" (__high) : "A" (n));       \
++            __upper = __high;                                       \
++            if (__high != 0) {                                      \
++                __upper = __high % __base;                          \
++                __high = __high / __base;                           \
++            }                                                       \
++            asm ("divl %2" : "=a" (__low), "=d" (__mod)             \
++                : "rm" (__base), "0" (__low), "1" (__upper));       \
++            asm ("" : "=A" (n) : "a" (__low), "d" (__high));        \
++            __mod;                                                  \
++        })
++
++#define barrier() __asm__ __volatile__ ("" ::: "memory")
+ 
+ static inline uint8_t inb(uint16_t port) __attribute__((always_inline));
+ static inline void insl(uint32_t port, void *addr, int cnt) __attribute__((always_inline));
+ static inline void outb(uint16_t port, uint8_t data) __attribute__((always_inline));
+ static inline void outw(uint16_t port, uint16_t data) __attribute__((always_inline));
++static inline void outsl(uint32_t port, const void *addr, int cnt) __attribute__((always_inline));
+ static inline uint32_t read_ebp(void) __attribute__((always_inline));
++static inline void breakpoint(void) __attribute__((always_inline));
++static inline uint32_t read_dr(unsigned regnum) __attribute__((always_inline));
++static inline void write_dr(unsigned regnum, uint32_t value) __attribute__((always_inline));
+ 
+ /* Pseudo-descriptors used for LGDT, LLDT(not used) and LIDT instructions. */
+ struct pseudodesc {
+     uint16_t pd_lim;        // Limit
+-    uint32_t pd_base;        // Base address
++    uintptr_t pd_base;      // Base address
+ } __attribute__ ((packed));
+ 
+ static inline void lidt(struct pseudodesc *pd) __attribute__((always_inline));
+ static inline void sti(void) __attribute__((always_inline));
+ static inline void cli(void) __attribute__((always_inline));
+ static inline void ltr(uint16_t sel) __attribute__((always_inline));
++static inline uint32_t read_eflags(void) __attribute__((always_inline));
++static inline void write_eflags(uint32_t eflags) __attribute__((always_inline));
++static inline void lcr0(uintptr_t cr0) __attribute__((always_inline));
++static inline void lcr3(uintptr_t cr3) __attribute__((always_inline));
++static inline uintptr_t rcr0(void) __attribute__((always_inline));
++static inline uintptr_t rcr1(void) __attribute__((always_inline));
++static inline uintptr_t rcr2(void) __attribute__((always_inline));
++static inline uintptr_t rcr3(void) __attribute__((always_inline));
++static inline void invlpg(void *addr) __attribute__((always_inline));
+ 
+ static inline uint8_t
+ inb(uint16_t port) {
+     uint8_t data;
+-    asm volatile ("inb %1, %0" : "=a" (data) : "d" (port));
++    asm volatile ("inb %1, %0" : "=a" (data) : "d" (port) : "memory");
+     return data;
+ }
+ 
+ static inline void
+ insl(uint32_t port, void *addr, int cnt) {
+     asm volatile (
+-            "cld;"
+-            "repne; insl;"
+-            : "=D" (addr), "=c" (cnt)
+-            : "d" (port), "0" (addr), "1" (cnt)
+-            : "memory", "cc");
++        "cld;"
++        "repne; insl;"
++        : "=D" (addr), "=c" (cnt)
++        : "d" (port), "0" (addr), "1" (cnt)
++        : "memory", "cc");
+ }
+ 
+ static inline void
+ outb(uint16_t port, uint8_t data) {
+-    asm volatile ("outb %0, %1" :: "a" (data), "d" (port));
++    asm volatile ("outb %0, %1" :: "a" (data), "d" (port) : "memory");
+ }
+ 
+ static inline void
+ outw(uint16_t port, uint16_t data) {
+-    asm volatile ("outw %0, %1" :: "a" (data), "d" (port));
++    asm volatile ("outw %0, %1" :: "a" (data), "d" (port) : "memory");
++}
++
++static inline void
++outsl(uint32_t port, const void *addr, int cnt) {
++    asm volatile (
++        "cld;"
++        "repne; outsl;"
++        : "=S" (addr), "=c" (cnt)
++        : "d" (port), "0" (addr), "1" (cnt)
++        : "memory", "cc");
+ }
+ 
+ static inline uint32_t
+@@ -70,8 +95,39 @@
+ }
+ 
+ static inline void
++breakpoint(void) {
++    asm volatile ("int $3");
++}
++
++static inline uint32_t
++read_dr(unsigned regnum) {
++    uint32_t value = 0;
++    switch (regnum) {
++    case 0: asm volatile ("movl %%db0, %0" : "=r" (value)); break;
++    case 1: asm volatile ("movl %%db1, %0" : "=r" (value)); break;
++    case 2: asm volatile ("movl %%db2, %0" : "=r" (value)); break;
++    case 3: asm volatile ("movl %%db3, %0" : "=r" (value)); break;
++    case 6: asm volatile ("movl %%db6, %0" : "=r" (value)); break;
++    case 7: asm volatile ("movl %%db7, %0" : "=r" (value)); break;
++    }
++    return value;
++}
++
++static void
++write_dr(unsigned regnum, uint32_t value) {
++    switch (regnum) {
++    case 0: asm volatile ("movl %0, %%db0" :: "r" (value)); break;
++    case 1: asm volatile ("movl %0, %%db1" :: "r" (value)); break;
++    case 2: asm volatile ("movl %0, %%db2" :: "r" (value)); break;
++    case 3: asm volatile ("movl %0, %%db3" :: "r" (value)); break;
++    case 6: asm volatile ("movl %0, %%db6" :: "r" (value)); break;
++    case 7: asm volatile ("movl %0, %%db7" :: "r" (value)); break;
++    }
++}
++
++static inline void
+ lidt(struct pseudodesc *pd) {
+-    asm volatile ("lidt (%0)" :: "r" (pd));
++    asm volatile ("lidt (%0)" :: "r" (pd) : "memory");
+ }
+ 
+ static inline void
+@@ -81,12 +137,67 @@
+ 
+ static inline void
+ cli(void) {
+-    asm volatile ("cli");
++    asm volatile ("cli" ::: "memory");
+ }
+ 
+ static inline void
+ ltr(uint16_t sel) {
+-    asm volatile ("ltr %0" :: "r" (sel));
++    asm volatile ("ltr %0" :: "r" (sel) : "memory");
++}
++
++static inline uint32_t
++read_eflags(void) {
++    uint32_t eflags;
++    asm volatile ("pushfl; popl %0" : "=r" (eflags));
++    return eflags;
++}
++
++static inline void
++write_eflags(uint32_t eflags) {
++    asm volatile ("pushl %0; popfl" :: "r" (eflags));
++}
++
++static inline void
++lcr0(uintptr_t cr0) {
++    asm volatile ("mov %0, %%cr0" :: "r" (cr0) : "memory");
++}
++
++static inline void
++lcr3(uintptr_t cr3) {
++    asm volatile ("mov %0, %%cr3" :: "r" (cr3) : "memory");
++}
++
++static inline uintptr_t
++rcr0(void) {
++    uintptr_t cr0;
++    asm volatile ("mov %%cr0, %0" : "=r" (cr0) :: "memory");
++    return cr0;
++}
++
++static inline uintptr_t
++rcr1(void) {
++    uintptr_t cr1;
++    asm volatile ("mov %%cr1, %0" : "=r" (cr1) :: "memory");
++    return cr1;
++}
++
++static inline uintptr_t
++rcr2(void) {
++    uintptr_t cr2;
++    asm volatile ("mov %%cr2, %0" : "=r" (cr2) :: "memory");
++    return cr2;
++}
++
++static inline uintptr_t
++rcr3(void) {
++    uintptr_t cr3;
++    asm volatile ("mov %%cr3, %0" : "=r" (cr3) :: "memory");
++    return cr3;
++}
++
++static inline void
++invlpg(void *addr) {
++    asm volatile ("invlpg (%0)" :: "r" (addr) : "memory");
+ }
+ 
+ static inline int __strcmp(const char *s1, const char *s2) __attribute__((always_inline));
+@@ -101,19 +212,19 @@
+ __strcmp(const char *s1, const char *s2) {
+     int d0, d1, ret;
+     asm volatile (
+-            "1: lodsb;"
+-            "scasb;"
+-            "jne 2f;"
+-            "testb %%al, %%al;"
+-            "jne 1b;"
+-            "xorl %%eax, %%eax;"
+-            "jmp 3f;"
+-            "2: sbbl %%eax, %%eax;"
+-            "orb $1, %%al;"
+-            "3:"
+-            : "=a" (ret), "=&S" (d0), "=&D" (d1)
+-            : "1" (s1), "2" (s2)
+-            : "memory");
++        "1: lodsb;"
++        "scasb;"
++        "jne 2f;"
++        "testb %%al, %%al;"
++        "jne 1b;"
++        "xorl %%eax, %%eax;"
++        "jmp 3f;"
++        "2: sbbl %%eax, %%eax;"
++        "orb $1, %%al;"
++        "3:"
++        : "=a" (ret), "=&S" (d0), "=&D" (d1)
++        : "1" (s1), "2" (s2)
++        : "memory");
+     return ret;
+ }
+ 
+@@ -125,12 +236,12 @@
+ __strcpy(char *dst, const char *src) {
+     int d0, d1, d2;
+     asm volatile (
+-            "1: lodsb;"
+-            "stosb;"
+-            "testb %%al, %%al;"
+-            "jne 1b;"
+-            : "=&S" (d0), "=&D" (d1), "=&a" (d2)
+-            : "0" (src), "1" (dst) : "memory");
++        "1: lodsb;"
++        "stosb;"
++        "testb %%al, %%al;"
++        "jne 1b;"
++        : "=&S" (d0), "=&D" (d1), "=&a" (d2)
++        : "0" (src), "1" (dst) : "memory");
+     return dst;
+ }
+ #endif /* __HAVE_ARCH_STRCPY */
+@@ -141,10 +252,10 @@
+ __memset(void *s, char c, size_t n) {
+     int d0, d1;
+     asm volatile (
+-            "rep; stosb;"
+-            : "=&c" (d0), "=&D" (d1)
+-            : "0" (n), "a" (c), "1" (s)
+-            : "memory");
++        "rep; stosb;"
++        : "=&c" (d0), "=&D" (d1)
++        : "0" (n), "a" (c), "1" (s)
++        : "memory");
+     return s;
+ }
+ #endif /* __HAVE_ARCH_MEMSET */
+@@ -158,12 +269,12 @@
+     }
+     int d0, d1, d2;
+     asm volatile (
+-            "std;"
+-            "rep; movsb;"
+-            "cld;"
+-            : "=&c" (d0), "=&S" (d1), "=&D" (d2)
+-            : "0" (n), "1" (n - 1 + src), "2" (n - 1 + dst)
+-            : "memory");
++        "std;"
++        "rep; movsb;"
++        "cld;"
++        : "=&c" (d0), "=&S" (d1), "=&D" (d2)
++        : "0" (n), "1" (n - 1 + src), "2" (n - 1 + dst)
++        : "memory");
+     return dst;
+ }
+ #endif /* __HAVE_ARCH_MEMMOVE */
+@@ -174,15 +285,15 @@
+ __memcpy(void *dst, const void *src, size_t n) {
+     int d0, d1, d2;
+     asm volatile (
+-            "rep; movsl;"
+-            "movl %4, %%ecx;"
+-            "andl $3, %%ecx;"
+-            "jz 1f;"
+-            "rep; movsb;"
+-            "1:"
+-            : "=&c" (d0), "=&D" (d1), "=&S" (d2)
+-            : "0" (n / 4), "g" (n), "1" (dst), "2" (src)
+-            : "memory");
++        "rep; movsl;"
++        "movl %4, %%ecx;"
++        "andl $3, %%ecx;"
++        "jz 1f;"
++        "rep; movsb;"
++        "1:"
++        : "=&c" (d0), "=&D" (d1), "=&S" (d2)
++        : "0" (n / 4), "g" (n), "1" (dst), "2" (src)
++        : "memory");
+     return dst;
+ }
+ #endif /* __HAVE_ARCH_MEMCPY */
+diff -ruN lab1/Makefile lab2/Makefile
+--- lab1/Makefile	2021-11-19 14:27:53.000000000 +0600
++++ lab2/Makefile	2021-11-08 18:05:44.000000000 +0600
+@@ -1,4 +1,4 @@
+-PROJ	:= challenge
++PROJ	:= 5
+ EMPTY	:=
+ SPACE	:= $(EMPTY) $(EMPTY)
+ SLASH	:= /
+@@ -58,6 +58,7 @@
+ CFLAGS	+= $(shell $(CC) -fno-stack-protector -E -x c /dev/null >/dev/null 2>&1 && echo -fno-stack-protector)
+ endif
+ 
++GDB		:= $(GCCPREFIX)gdb
+ CTYPE	:= c S
+ 
+ LD      := $(GCCPREFIX)ld
+@@ -77,6 +78,9 @@
+ TR		:= tr
+ TOUCH	:= touch -c
+ 
++TAR		:= tar
++ZIP		:= gzip
++
+ OBJDIR	:= obj
+ BINDIR	:= bin
+ 
+@@ -122,14 +126,17 @@
+ KINCLUDE	+= kern/debug/ \
+ 			   kern/driver/ \
+ 			   kern/trap/ \
+-			   kern/mm/
++			   kern/mm/ \
++			   kern/libs/ \
++			   kern/sync/
+ 
+ KSRCDIR		+= kern/init \
+ 			   kern/libs \
+ 			   kern/debug \
+ 			   kern/driver \
+ 			   kern/trap \
+-			   kern/mm
++			   kern/mm \
++			   kern/sync
+ 
+ KCFLAGS		+= $(addprefix -I,$(KINCLUDE))
+ 
+@@ -150,6 +157,20 @@
+ 
+ $(call create_target,kernel)
+ 
++
++# create kernel_nopage target
++kernel_nopage = $(call totarget,kernel_nopage)
++
++$(kernel_nopage): tools/kernel_nopage.ld
++
++$(kernel_nopage): $(KOBJS)
++	@echo + ld $@
++	$(V)$(LD) $(LDFLAGS) -T tools/kernel_nopage.ld -o $@ $(KOBJS)
++	@$(OBJDUMP) -S $@ > $(call asmfile,kernel_nopage)
++	@$(OBJDUMP) -t $@ | $(SED) '1,/SYMBOL TABLE/d; s/ .* / /; /^$$/d' > $(call symfile,kernel_nopage)
++
++$(call create_target,kernel)
++
+ # -------------------------------------------------------------------
+ 
+ # create bootblock
+@@ -158,9 +179,9 @@
+ 
+ bootblock = $(call totarget,bootblock)
+ 
+-$(bootblock): $(call toobj,$(bootfiles)) | $(call totarget,sign)
++$(bootblock): $(call toobj,boot/bootasm.S) $(call toobj,$(bootfiles)) | $(call totarget,sign)
+ 	@echo + ld $@
+-	$(V)$(LD) $(LDFLAGS) -N -e start -Ttext 0x7C00 $^ -o $(call toobj,bootblock)
++	$(V)$(LD) $(LDFLAGS) -N -T tools/boot.ld $^ -o $(call toobj,bootblock)
+ 	@$(OBJDUMP) -S $(call objfile,bootblock) > $(call asmfile,bootblock)
+ 	@$(OBJCOPY) -S -O binary $(call objfile,bootblock) $(call outfile,bootblock)
+ 	@$(call totarget,sign) $(call outfile,bootblock) $(bootblock)
+@@ -178,7 +199,7 @@
+ # create ucore.img
+ UCOREIMG	:= $(call totarget,ucore.img)
+ 
+-$(UCOREIMG): $(kernel) $(bootblock)
++$(UCOREIMG): $(kernel) $(bootblock) $(kernel_nopage)
+ 	$(V)dd if=/dev/zero of=$@ count=10000
+ 	$(V)dd if=$(bootblock) of=$@ conv=notrunc
+ 	$(V)dd if=$(kernel) of=$@ seek=1 conv=notrunc
+@@ -189,8 +210,9 @@
+ 
+ $(call finish_all)
+ 
+-IGNORE_ALLDEPS	= clean \
+-				  dist-clean \
++IGNORE_ALLDEPS	= gdb \
++				  clean \
++				  distclean \
+ 				  grade \
+ 				  touch \
+ 				  print-.+ \
+@@ -206,31 +228,34 @@
+ 
+ .DEFAULT_GOAL := TARGETS
+ 
++QEMUOPTS = -hda $(UCOREIMG)
++
+ .PHONY: qemu qemu-nox debug debug-nox
+ qemu-mon: $(UCOREIMG)
+-	$(V)$(QEMU)  -no-reboot -monitor stdio -hda $< -serial null
++	$(V)$(QEMU)  -no-reboot -monitor stdio $(QEMUOPTS) -serial null
+ qemu: $(UCOREIMG)
+-	$(V)$(QEMU) -no-reboot -parallel stdio -hda $< -serial null
+-log: $(UCOREIMG)
+-	$(V)$(QEMU) -no-reboot -d int,cpu_reset  -D q.log -parallel stdio -hda $< -serial null
++	$(V)$(QEMU)  -no-reboot -parallel stdio $(QEMUOPTS) -serial null
++
+ qemu-nox: $(UCOREIMG)
+-	$(V)$(QEMU)   -no-reboot -serial mon:stdio -hda $< -nographic
+-TERMINAL        :=gnome-terminal
++	$(V)$(QEMU)  -no-reboot -serial mon:stdio $(QEMUOPTS) -nographic
++
++TERMINAL := gnome-terminal
++
+ debug: $(UCOREIMG)
+-	$(V)$(QEMU) -S -s -parallel stdio -hda $< -serial null &
++	$(V)$(QEMU) -S -s -parallel stdio $(QEMUOPTS) -serial null &
+ 	$(V)sleep 2
+-	$(V)$(TERMINAL) -e "gdb -q -tui -x tools/gdbinit"
+-	
++	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
++
+ debug-nox: $(UCOREIMG)
+-	$(V)$(QEMU) -S -s -serial mon:stdio -hda $< -nographic &
++	$(V)$(QEMU) -S -s -serial mon:stdio $(QEMUOPTS) -nographic &
+ 	$(V)sleep 2
+-	$(V)$(TERMINAL) -e "gdb -q -x tools/gdbinit"
++	$(V)$(TERMINAL) -e "$(GDB) -q -x tools/gdbinit"
+ 
+ .PHONY: grade touch
+ 
+ GRADE_GDB_IN	:= .gdb.in
+ GRADE_QEMU_OUT	:= .qemu.out
+-HANDIN			:= proj$(PROJ)-handin.tar.gz
++HANDIN			:= lab2-handin.tar.gz
+ 
+ TOUCH_FILES		:= kern/trap/trap.c
+ 
+@@ -246,21 +271,19 @@
+ print-%:
+ 	@echo $($(shell echo $(patsubst print-%,%,$@) | $(TR) [a-z] [A-Z]))
+ 
+-.PHONY: clean dist-clean handin packall tags
++.PHONY: clean distclean handin tags
+ clean:
+ 	$(V)$(RM) $(GRADE_GDB_IN) $(GRADE_QEMU_OUT) cscope* tags
+-	-$(RM) -r $(OBJDIR) $(BINDIR)
+-
+-dist-clean: clean
+-	-$(RM) $(HANDIN)
+-
+-handin: packall
+-	@echo Please visit http://learn.tsinghua.edu.cn and upload $(HANDIN). Thanks!
++	$(V)$(RM) -r $(OBJDIR) $(BINDIR)
+ 
+-packall: clean
+-	@$(RM) -f $(HANDIN)
+-	@tar -czf $(HANDIN) `find . -type f -o -type d | grep -v '^\.*$$' | grep -vF '$(HANDIN)'`
++distclean: clean
++	$(V)$(RM) $(HANDIN)
+ 
++handin: distclean
++	$(V)$(TAR) -cf - `find . -type f -o -type d | grep -v '^\.$$' | grep -v '/CVS/' \
++					| grep -v '/\.git/' | grep -v '/\.svn/' | grep -v "$(HANDIN)"` \
++					| $(ZIP) > $(HANDIN)
++					
+ tags:
+ 	@echo TAGS ALL
+ 	$(V)rm -f cscope.files cscope.in.out cscope.out cscope.po.out tags
+diff -ruN lab1/tools/boot.ld lab2/tools/boot.ld
+--- lab1/tools/boot.ld	1970-01-01 06:00:00.000000000 +0600
++++ lab2/tools/boot.ld	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,15 @@
++OUTPUT_FORMAT("elf32-i386")
++OUTPUT_ARCH(i386)
++
++SECTIONS {
++    . = 0x7C00;
++
++    .startup : {
++        *bootasm.o(.text)
++    }
++
++    .text : { *(.text) }
++    .data : { *(.data .rodata) }
++    
++    /DISCARD/ : { *(.eh_*) }
++}
+diff -ruN lab1/tools/gdbinit lab2/tools/gdbinit
+--- lab1/tools/gdbinit	2021-11-19 14:47:34.000000000 +0600
++++ lab2/tools/gdbinit	2021-11-08 18:05:44.000000000 +0600
+@@ -1,3 +1,3 @@
+ file bin/kernel
+-set architecture i8086
+-target remote :1234
+\ 文件尾没有换行符
++target remote :1234
++break kern_init
+diff -ruN lab1/tools/grade.sh lab2/tools/grade.sh
+--- lab1/tools/grade.sh	2021-11-21 11:02:31.000000000 +0600
++++ lab2/tools/grade.sh	2021-11-08 18:05:44.000000000 +0600
+@@ -1,353 +1,345 @@
+-#!/bin/sh
+-
+-verbose=false
+-if [ "x$1" = "x-v" ]; then
+-	verbose=true
+-	out=/dev/stdout
+-	err=/dev/stderr
+-else
+-	out=/dev/null
+-	err=/dev/null
+-fi
+-
+-## make & makeopts
+-if gmake --version > /dev/null 2>&1; then
+-	make=gmake;
+-else
+-	make=make;
+-fi
+-
+-makeopts="--quiet --no-print-directory -j"
+-
+-make_print() {
+-	echo `$make $makeopts print-$1`
+-}
+-
+-## command tools
+-awk='awk'
+-bc='bc'
+-date='date'
+-grep='grep'
+-rm='rm -f'
+-sed='sed'
+-
+-## symbol table
+-sym_table='obj/kernel.sym'
+-
+-## gdb & gdbopts
+-gdb="$(make_print GCCPREFIX)gdb"
+-gdbport='1234'
+-
+-gdb_in="$(make_print GRADE_GDB_IN)"
+-
+-## qemu & qemuopts
+-qemu="$(make_print qemu)"
+-
+-qemu_out="$(make_print GRADE_QEMU_OUT)"
+-
+-if $qemu -nographic -help | grep -q '^-gdb'; then
+-	qemugdb="-gdb tcp::$gdbport"
+-else
+-	qemugdb="-s -p $gdbport"
+-fi
+-
+-## default variables
+-default_timeout=30
+-default_pts=5
+-
+-pts=5
+-part=0
+-part_pos=0
+-total=0
+-total_pos=0
+-
+-## default functions
+-update_score() {
+-	total=`expr $total + $part`
+-	total_pos=`expr $total_pos + $part_pos`
+-	part=0
+-	part_pos=0
+-}
+-
+-get_time() {
+-	echo `$date +%s.%N 2> /dev/null`
+-}
+-
+-show_part() {
+-	echo "Part $1 Score: $part/$part_pos"
+-	echo
+-	update_score
+-}
+-
+-show_final() {
+-	update_score
+-	echo "Total Score: $total/$total_pos"
+-	if [ $total -lt $total_pos ]; then
+-		exit 1
+-	fi
+-}
+-
+-show_time() {
+-	t1=$(get_time)
+-	time=`echo "scale=1; ($t1-$t0)/1" | $sed 's/.N/.0/g' | $bc 2> /dev/null`
+-	echo "(${time}s)"
+-}
+-
+-show_build_tag() {
+-	echo "$1:" | $awk '{printf "%-24s ", $0}'
+-}
+-
+-show_check_tag() {
+-	echo "$1:" | $awk '{printf "  -%-40s  ", $0}'
+-}
+-
+-show_msg() {
+-	echo $1
+-	shift
+-	if [ $# -gt 0 ]; then
+-		echo -e "$@" | awk '{printf "   %s\n", $0}'
+-		echo
+-	fi
+-}
+-
+-pass() {
+-	show_msg OK "$@"
+-	part=`expr $part + $pts`
+-	part_pos=`expr $part_pos + $pts`
+-}
+-
+-fail() {
+-	show_msg WRONG "$@"
+-	part_pos=`expr $part_pos + $pts`
+-}
+-
+-run_qemu() {
+-	# Run qemu with serial output redirected to $qemu_out. If $brkfun is non-empty,
+-	# wait until $brkfun is reached or $timeout expires, then kill QEMU
+-	qemuextra=
+-	if [ "$brkfun" ]; then
+-		qemuextra="-S $qemugdb"
+-	fi
+-
+-	if [ -z "$timeout" ] || [ $timeout -le 0 ]; then
+-		timeout=$default_timeout;
+-	fi
+-
+-	t0=$(get_time)
+-	(
+-		ulimit -t $timeout
+-		exec $qemu -nographic $qemuopts -serial file:$qemu_out -monitor null -no-reboot $qemuextra
+-	) > $out 2> $err &
+-	pid=$!
+-
+-	# wait for QEMU to start
+-	sleep 1
+-
+-	if [ -n "$brkfun" ]; then
+-		# find the address of the kernel $brkfun function
+-		brkaddr=`$grep " $brkfun\$" $sym_table | $sed -e's/ .*$//g'`
+-		brkaddr_phys=`echo $brkaddr | sed "s/^c0/00/g"`
+-		(
+-			echo "target remote localhost:$gdbport"
+-			echo "break *0x$brkaddr"
+-			if [ "$brkaddr" != "$brkaddr_phys" ]; then
+-			    echo "break *0x$brkaddr_phys"
+-			fi
+-			echo "continue"
+-		) > $gdb_in
+-
+-		$gdb -batch -nx -x $gdb_in > /dev/null 2>&1
+-
+-		# make sure that QEMU is dead
+-		# on OS X, exiting gdb doesn't always exit qemu
+-		kill $pid > /dev/null 2>&1
+-	fi
+-}
+-
+-build_run() {
+-	# usage: build_run <tag> <args>
+-	show_build_tag "$1"
+-	shift
+-
+-	if $verbose; then
+-		echo "$make $@ ..."
+-	fi
+-	$make $makeopts $@ 'DEFS+=-DDEBUG_GRADE' > $out 2> $err
+-
+-	if [ $? -ne 0 ]; then
+-		echo $make $@ failed
+-		exit 1
+-	fi
+-
+-	# now run qemu and save the output
+-	run_qemu
+-
+-	show_time
+-
+-	cp $qemu_out .`echo $tag | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g'`.log
+-}
+-
+-check_result() {
+-	# usage: check_result <tag> <check> <check args...>
+-	show_check_tag "$1"
+-	shift
+-
+-	# give qemu some time to run (for asynchronous mode)
+-	if [ ! -s $qemu_out ]; then
+-		sleep 4
+-	fi
+-
+-	if [ ! -s $qemu_out ]; then
+-		fail > /dev/null
+-		echo 'no $qemu_out'
+-	else
+-		check=$1
+-		shift
+-		$check "$@"
+-	fi
+-}
+-
+-check_regexps() {
+-	okay=yes
+-	not=0
+-	reg=0
+-	error=
+-	for i do
+-		if [ "x$i" = "x!" ]; then
+-			not=1
+-		elif [ "x$i" = "x-" ]; then
+-			reg=1
+-		else
+-			if [ $reg -ne 0 ]; then
+-				$grep '-E' "^$i\$" $qemu_out > /dev/null
+-			else
+-				$grep '-F' "$i" $qemu_out > /dev/null
+-			fi
+-			found=$(($? == 0))
+-			if [ $found -eq $not ]; then
+-				if [ $found -eq 0 ]; then
+-					msg="!! error: missing '$i'"
+-				else
+-					msg="!! error: got unexpected line '$i'"
+-				fi
+-				okay=no
+-				if [ -z "$error" ]; then
+-					error="$msg"
+-				else
+-					error="$error\n$msg"
+-				fi
+-			fi
+-			not=0
+-			reg=0
+-		fi
+-	done
+-	if [ "$okay" = "yes" ]; then
+-		pass
+-	else
+-		fail "$error"
+-		if $verbose; then
+-			exit 1
+-		fi
+-	fi
+-}
+-
+-run_test() {
+-	# usage: run_test [-tag <tag>] [-Ddef...] [-check <check>] checkargs ...
+-	tag=
+-	check=check_regexps
+-	while true; do
+-		select=
+-		case $1 in
+-			-tag)
+-				select=`expr substr $1 2 ${#1}`
+-				eval $select='$2'
+-				;;
+-		esac
+-		if [ -z "$select" ]; then
+-			break
+-		fi
+-		shift
+-		shift
+-	done
+-	defs=
+-	while expr "x$1" : "x-D.*" > /dev/null; do
+-		defs="DEFS+='$1' $defs"
+-		shift
+-	done
+-	if [ "x$1" = "x-check" ]; then
+-		check=$2
+-		shift
+-		shift
+-	fi
+-
+-	$make $makeopts touch > /dev/null 2>&1
+-	build_run "$tag" "$defs"
+-
+-	check_result 'check result' "$check" "$@"
+-}
+-
+-quick_run() {
+-	# usage: quick_run <tag> [-Ddef...]
+-	tag="$1"
+-	shift
+-	defs=
+-	while expr "x$1" : "x-D.*" > /dev/null; do
+-		defs="DEFS+='$1' $defs"
+-		shift
+-	done
+-
+-	$make $makeopts touch > /dev/null 2>&1
+-	build_run "$tag" "$defs"
+-}
+-
+-quick_check() {
+-	# usage: quick_check <tag> checkargs ...
+-	tag="$1"
+-	shift
+-	check_result "$tag" check_regexps "$@"
+-}
+-
+-## kernel image
+-osimg=$(make_print ucoreimg)
+-
+-## set default qemu-options
+-qemuopts="-hda $osimg"
+-
+-## set break-function, default is readline
+-brkfun=readline
+-
+-## check now!!
+-
+-quick_run 'Check Output'
+-
+-pts=10
+-quick_check 'check ring 0'										\
+-	'0: @ring 0'												\
+-	'0:  cs = 8'												\
+-	'0:  ds = 10'												\
+-	'0:  es = 10'												\
+-	'0:  ss = 10'
+-
+-quick_check 'check switch to ring 3'							\
+-	'+++ switch to  user  mode +++'								\
+-	'1: @ring 3'												\
+-	'1:  cs = 1b'												\
+-	'1:  ds = 23'												\
+-	'1:  es = 23'												\
+-	'1:  ss = 23'
+-
+-quick_check 'check switch to ring 0'							\
+-	'+++ switch to kernel mode +++'								\
+-	'2: @ring 0'												\
+-	'2:  cs = 8'												\
+-	'2:  ds = 10'												\
+-	'2:  es = 10'												\
+-	'2:  ss = 10'
+-
+-quick_check 'check ticks'										\
+-	'++ setup timer interrupts'									\
+-	'100 ticks'													\
+-	'End of Test.'
+-
+-## print final-score
+-show_final
++#!/bin/sh
++
++verbose=false
++if [ "x$1" = "x-v" ]; then
++    verbose=true
++    out=/dev/stdout
++    err=/dev/stderr
++else
++    out=/dev/null
++    err=/dev/null
++fi
++
++## make & makeopts
++if gmake --version > /dev/null 2>&1; then
++    make=gmake;
++else
++    make=make;
++fi
++
++makeopts="--quiet --no-print-directory -j"
++
++make_print() {
++    echo `$make $makeopts print-$1`
++}
++
++## command tools
++awk='awk'
++bc='bc'
++date='date'
++grep='grep'
++rm='rm -f'
++sed='sed'
++
++## symbol table
++sym_table='obj/kernel.sym'
++
++## gdb & gdbopts
++gdb="$(make_print GDB)"
++gdbport='1234'
++
++gdb_in="$(make_print GRADE_GDB_IN)"
++
++## qemu & qemuopts
++qemu="$(make_print qemu)"
++
++qemu_out="$(make_print GRADE_QEMU_OUT)"
++
++if $qemu -nographic -help | grep -q '^-gdb'; then
++    qemugdb="-gdb tcp::$gdbport"
++else
++    qemugdb="-s -p $gdbport"
++fi
++
++## default variables
++default_timeout=30
++default_pts=5
++
++pts=5
++part=0
++part_pos=0
++total=0
++total_pos=0
++
++## default functions
++update_score() {
++    total=`expr $total + $part`
++    total_pos=`expr $total_pos + $part_pos`
++    part=0
++    part_pos=0
++}
++
++get_time() {
++    echo `$date +%s.%N 2> /dev/null`
++}
++
++show_part() {
++    echo "Part $1 Score: $part/$part_pos"
++    echo
++    update_score
++}
++
++show_final() {
++    update_score
++    echo "Total Score: $total/$total_pos"
++    if [ $total -lt $total_pos ]; then
++        exit 1
++    fi
++}
++
++show_time() {
++    t1=$(get_time)
++    time=`echo "scale=1; ($t1-$t0)/1" | $sed 's/.N/.0/g' | $bc 2> /dev/null`
++    echo "(${time}s)"
++}
++
++show_build_tag() {
++    echo "$1:" | $awk '{printf "%-24s ", $0}'
++}
++
++show_check_tag() {
++    echo "$1:" | $awk '{printf "  -%-40s  ", $0}'
++}
++
++show_msg() {
++    echo $1
++    shift
++    if [ $# -gt 0 ]; then
++        echo -e "$@" | awk '{printf "   %s\n", $0}'
++        echo
++    fi
++}
++
++pass() {
++    show_msg OK "$@"
++    part=`expr $part + $pts`
++    part_pos=`expr $part_pos + $pts`
++}
++
++fail() {
++    show_msg WRONG "$@"
++    part_pos=`expr $part_pos + $pts`
++}
++
++run_qemu() {
++    # Run qemu with serial output redirected to $qemu_out. If $brkfun is non-empty,
++    # wait until $brkfun is reached or $timeout expires, then kill QEMU
++    qemuextra=
++    if [ "$brkfun" ]; then
++        qemuextra="-S $qemugdb"
++    fi
++
++    if [ -z "$timeout" ] || [ $timeout -le 0 ]; then
++        timeout=$default_timeout;
++    fi
++
++    t0=$(get_time)
++    (
++        ulimit -t $timeout
++        exec $qemu -nographic $qemuopts -serial file:$qemu_out -monitor null -no-reboot $qemuextra
++    ) > $out 2> $err &
++    pid=$!
++
++    # wait for QEMU to start
++    sleep 1
++
++    if [ -n "$brkfun" ]; then
++        # find the address of the kernel $brkfun function
++        brkaddr=`$grep " $brkfun\$" $sym_table | $sed -e's/ .*$//g'`
++        brkaddr_phys=`echo $brkaddr | sed "s/^c0/00/g"`
++        (
++            echo "target remote localhost:$gdbport"
++            echo "break *0x$brkaddr"
++            if [ "$brkaddr" != "$brkaddr_phys" ]; then
++                echo "break *0x$brkaddr_phys"
++            fi
++            echo "continue"
++        ) > $gdb_in
++
++        $gdb -batch -nx -x $gdb_in > /dev/null 2>&1
++
++        # make sure that QEMU is dead
++        # on OS X, exiting gdb doesn't always exit qemu
++        kill $pid > /dev/null 2>&1
++    fi
++}
++
++build_run() {
++    # usage: build_run <tag> <args>
++    show_build_tag "$1"
++    shift
++
++    if $verbose; then
++        echo "$make $@ ..."
++    fi
++    $make $makeopts $@ 'DEFS+=-DDEBUG_GRADE' > $out 2> $err
++
++    if [ $? -ne 0 ]; then
++        echo $make $@ failed
++        exit 1
++    fi
++
++    # now run qemu and save the output
++    run_qemu
++
++    show_time
++
++    cp $qemu_out .`echo $tag | tr '[:upper:]' '[:lower:]' | sed 's/ /_/g'`.log
++}
++
++check_result() {
++    # usage: check_result <tag> <check> <check args...>
++    show_check_tag "$1"
++    shift
++
++    # give qemu some time to run (for asynchronous mode)
++    if [ ! -s $qemu_out ]; then
++        sleep 4
++    fi
++
++    if [ ! -s $qemu_out ]; then
++        fail > /dev/null
++        echo 'no $qemu_out'
++    else
++        check=$1
++        shift
++        $check "$@"
++    fi
++}
++
++check_regexps() {
++    okay=yes
++    not=0
++    reg=0
++    error=
++    for i do
++        if [ "x$i" = "x!" ]; then
++            not=1
++        elif [ "x$i" = "x-" ]; then
++            reg=1
++        else
++            if [ $reg -ne 0 ]; then
++                $grep '-E' "^$i\$" $qemu_out > /dev/null
++            else
++                $grep '-F' "$i" $qemu_out > /dev/null
++            fi
++            found=$(($? == 0))
++            if [ $found -eq $not ]; then
++                if [ $found -eq 0 ]; then
++                    msg="!! error: missing '$i'"
++                else
++                    msg="!! error: got unexpected line '$i'"
++                fi
++                okay=no
++                if [ -z "$error" ]; then
++                    error="$msg"
++                else
++                    error="$error\n$msg"
++                fi
++            fi
++            not=0
++            reg=0
++        fi
++    done
++    if [ "$okay" = "yes" ]; then
++        pass
++    else
++        fail "$error"
++        if $verbose; then
++            exit 1
++        fi
++    fi
++}
++
++run_test() {
++    # usage: run_test [-tag <tag>] [-Ddef...] [-check <check>] checkargs ...
++    tag=
++    check=check_regexps
++    while true; do
++        select=
++        case $1 in
++            -tag)
++                select=`expr substr $1 2 ${#1}`
++                eval $select='$2'
++                ;;
++        esac
++        if [ -z "$select" ]; then
++            break
++        fi
++        shift
++        shift
++    done
++    defs=
++    while expr "x$1" : "x-D.*" > /dev/null; do
++        defs="DEFS+='$1' $defs"
++        shift
++    done
++    if [ "x$1" = "x-check" ]; then
++        check=$2
++        shift
++        shift
++    fi
++
++    $make $makeopts touch > /dev/null 2>&1
++    build_run "$tag" "$defs"
++
++    check_result 'check result' "$check" "$@"
++}
++
++quick_run() {
++    # usage: quick_run <tag> [-Ddef...]
++    tag="$1"
++    shift
++    defs=
++    while expr "x$1" : "x-D.*" > /dev/null; do
++        defs="DEFS+='$1' $defs"
++        shift
++    done
++
++    $make $makeopts touch > /dev/null 2>&1
++    build_run "$tag" "$defs"
++}
++
++quick_check() {
++    # usage: quick_check <tag> checkargs ...
++    tag="$1"
++    shift
++    check_result "$tag" check_regexps "$@"
++}
++
++## kernel image
++osimg=$(make_print ucoreimg)
++
++## set default qemu-options
++qemuopts="-hda $osimg"
++
++## set break-function, default is readline
++brkfun=readline
++
++## check now!!
++
++quick_run 'Check PMM'
++
++pts=20
++quick_check 'check pmm'                                         \
++    'memory management: default_pmm_manager'                     \
++    'check_alloc_page() succeeded!'                             \
++    'check_pgdir() succeeded!'                                  \
++    'check_boot_pgdir() succeeded!'
++
++pts=20
++quick_check 'check page table'                                  \
++    'PDE(0e0) c0000000-f8000000 38000000 urw'                   \
++    '  |-- PTE(38000) c0000000-f8000000 38000000 -rw'           \
++    'PDE(001) fac00000-fb000000 00400000 -rw'                   \
++    '  |-- PTE(000e0) faf00000-fafe0000 000e0000 urw'           \
++    '  |-- PTE(00001) fafeb000-fafec000 00001000 -rw'
++
++pts=10
++quick_check 'check ticks'                                       \
++    '++ setup timer interrupts'                                 \
++    '100 ticks'                                                 \
++    'End of Test.'
++
++## print final-score
++show_final
+diff -ruN lab1/tools/kernel.ld lab2/tools/kernel.ld
+--- lab1/tools/kernel.ld	2021-11-08 18:05:44.000000000 +0600
++++ lab2/tools/kernel.ld	2021-11-08 18:05:44.000000000 +0600
+@@ -1,58 +1,63 @@
+-/* Simple linker script for the JOS kernel.
++/* Simple linker script for the ucore kernel.
+    See the GNU ld 'info' manual ("info ld") to learn the syntax. */
+ 
+ OUTPUT_FORMAT("elf32-i386", "elf32-i386", "elf32-i386")
+ OUTPUT_ARCH(i386)
+-ENTRY(kern_init)
++ENTRY(kern_entry)
+ 
+ SECTIONS {
+-	/* Load the kernel at this address: "." means the current address */
+-	. = 0x100000;
++    /* Load the kernel at this address: "." means the current address */
++    . = 0xC0100000;
+ 
+-	.text : {
+-		*(.text .stub .text.* .gnu.linkonce.t.*)
+-	}
+-
+-	PROVIDE(etext = .);	/* Define the 'etext' symbol to this value */
+-
+-	.rodata : {
+-		*(.rodata .rodata.* .gnu.linkonce.r.*)
+-	}
+-
+-	/* Include debugging information in kernel memory */
+-	.stab : {
+-		PROVIDE(__STAB_BEGIN__ = .);
+-		*(.stab);
+-		PROVIDE(__STAB_END__ = .);
+-		BYTE(0)		/* Force the linker to allocate space
+-				   for this section */
+-	}
+-
+-	.stabstr : {
+-		PROVIDE(__STABSTR_BEGIN__ = .);
+-		*(.stabstr);
+-		PROVIDE(__STABSTR_END__ = .);
+-		BYTE(0)		/* Force the linker to allocate space
+-				   for this section */
+-	}
+-
+-	/* Adjust the address for the data segment to the next page */
+-	. = ALIGN(0x1000);
+-
+-	/* The data segment */
+-	.data : {
+-		*(.data)
+-	}
+-
+-	PROVIDE(edata = .);
+-
+-	.bss : {
+-		*(.bss)
+-	}
+-
+-	PROVIDE(end = .);
+-
+-	/DISCARD/ : {
+-		*(.eh_frame .note.GNU-stack)
+-	}
++    .text : {
++        *(.text .stub .text.* .gnu.linkonce.t.*)
++    }
++
++    PROVIDE(etext = .); /* Define the 'etext' symbol to this value */
++
++    .rodata : {
++        *(.rodata .rodata.* .gnu.linkonce.r.*)
++    }
++
++    /* Include debugging information in kernel memory */
++    .stab : {
++        PROVIDE(__STAB_BEGIN__ = .);
++        *(.stab);
++        PROVIDE(__STAB_END__ = .);
++        BYTE(0)     /* Force the linker to allocate space
++                   for this section */
++    }
++
++    .stabstr : {
++        PROVIDE(__STABSTR_BEGIN__ = .);
++        *(.stabstr);
++        PROVIDE(__STABSTR_END__ = .);
++        BYTE(0)     /* Force the linker to allocate space
++                   for this section */
++    }
++
++    /* Adjust the address for the data segment to the next page */
++    . = ALIGN(0x1000);
++
++    /* The data segment */
++    .data : {
++        *(.data)
++    }
++
++    . = ALIGN(0x1000);
++    .data.pgdir : {
++        *(.data.pgdir)
++    }
++
++    PROVIDE(edata = .);
++
++    .bss : {
++        *(.bss)
++    }
++
++    PROVIDE(end = .);
++
++    /DISCARD/ : {
++        *(.eh_frame .note.GNU-stack)
++    }
+ }
+diff -ruN lab1/tools/kernel_nopage.ld lab2/tools/kernel_nopage.ld
+--- lab1/tools/kernel_nopage.ld	1970-01-01 06:00:00.000000000 +0600
++++ lab2/tools/kernel_nopage.ld	2021-11-08 18:05:44.000000000 +0600
+@@ -0,0 +1,59 @@
++/* Simple linker script for the ucore kernel.
++   See the GNU ld 'info' manual ("info ld") to learn the syntax. */
++
++OUTPUT_FORMAT("elf32-i386", "elf32-i386", "elf32-i386")
++OUTPUT_ARCH(i386)
++ENTRY(kern_entry)
++
++SECTIONS {
++    /* Load the kernel at this address: "." means the current address */
++    /* the phy addr of ucore (before ucore enable paging mechanism*/
++    . = 0x0100000;
++
++    .text : {
++        *(.text .stub .text.* .gnu.linkonce.t.*)
++    }
++
++    PROVIDE(etext = .); /* Define the 'etext' symbol to this value */
++
++    .rodata : {
++        *(.rodata .rodata.* .gnu.linkonce.r.*)
++    }
++
++    /* Include debugging information in kernel memory */
++    .stab : {
++        PROVIDE(__STAB_BEGIN__ = .);
++        *(.stab);
++        PROVIDE(__STAB_END__ = .);
++        BYTE(0)     /* Force the linker to allocate space
++                   for this section */
++    }
++
++    .stabstr : {
++        PROVIDE(__STABSTR_BEGIN__ = .);
++        *(.stabstr);
++        PROVIDE(__STABSTR_END__ = .);
++        BYTE(0)     /* Force the linker to allocate space
++                   for this section */
++    }
++
++    /* Adjust the address for the data segment to the next page */
++    . = ALIGN(0x1000);
++
++    /* The data segment */
++    .data : {
++        *(.data)
++    }
++
++    PROVIDE(edata = .);
++
++    .bss : {
++        *(.bss)
++    }
++
++    PROVIDE(end = .);
++
++    /DISCARD/ : {
++        *(.eh_frame .note.GNU-stack)
++    }
++}
