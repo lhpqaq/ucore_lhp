@@ -341,7 +341,7 @@ _fifo_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick
 <a name = "exclock"></a> 
 #### 识别dirty bit的extended clock页替换算法
 extended与Enhanced两个单词不一样，所以应该不是要写改进的时钟页替换算法，我没有搜索到什么是`识别dirty bit的extended clock页替换算法`算法，个人理解是将一般的页替换算法的标记位认定为dirty位，所以算法思想为：如果dirty位为“0”，则淘汰该页，把它换出到硬盘上；如果dirty为“1”，则将该页表项的此位置“0”，继续访问下一个页。  
-代码如下：
+换出的代码如下：
 ```C
 static int
 _extend_clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int in_tick)
@@ -386,6 +386,25 @@ _extend_clock_swap_out_victim(struct mm_struct *mm, struct Page ** ptr_page, int
 }
 ```
 或者去掉for循环，在遍历依次后如果没有找到换出的页，则强制替换最前面的页，效果与上方代码是等价的，并且效率更高，但是上面的代码比较直观。  
+在设置某个页面可交换时，要将新插入的页dirty bit标记为0.即修改map_swappable：
+```C
+static int
+_extend_clock_map_swappable(struct mm_struct *mm, uintptr_t addr, struct Page *page, int swap_in)
+{
+    list_entry_t *head=(list_entry_t*) mm->sm_priv;
+    list_entry_t *entry=&(page->pra_page_link);
+ 
+    assert(entry != NULL && head != NULL);
+    //record the page access situlation
+    /*LAB3 EXERCISE 2: YOUR CODE*/ 
+    //(1)link the most recent arrival page at the back of the pra_list_head qeueue.
+    list_add(head, entry);//将最近用到的页面添加到次序的队尾。
+    struct Page *ptr = le2page(entry, pra_page_link);
+    pte_t *pte = get_pte(mm -> pgdir, ptr -> pra_vaddr, 0);
+    *pte &= ~PTE_D;
+    return 0;
+}
+```
 修改框架进行测试：
 ```C
 struct swap_manager swap_manager_fifo =
@@ -402,8 +421,8 @@ struct swap_manager swap_manager_fifo =
     .check_swap = &_extend_clock_check_swap,     
 };
 ```
-测试结果：
-```
+测试结果如下，解释见注释：
+```shell
 -------------------- BEGIN --------------------
 PDE(0e0) c0000000-f8000000 38000000 urw
   |-- PTE(38000) c0000000-f8000000 38000000 -rw
@@ -421,8 +440,8 @@ SWAP: manager = fifo swap manager
 BEGIN check_swap: count 1, total 31960
 setup Page Table for vaddr 0X1000, so alloc a page
 setup Page Table vaddr 0~4MB OVER!
-set up init env for check_swap begin!
-page fault at 0x00001000: K/W [no page found].
+set up init env for check_swap begin!                       #初始化完成
+page fault at 0x00001000: K/W [no page found].              #给虚拟地址赋值失败，0x1000-0x4000四个地址分别对应a,b,c,d
 page fault at 0x00002000: K/W [no page found].
 page fault at 0x00003000: K/W [no page found].
 page fault at 0x00004000: K/W [no page found].
@@ -430,12 +449,12 @@ set up init env for check_swap over!
 write Virt Page c in clock_check_swap
 write Virt Page a in clock_check_swap
 write Virt Page d in clock_check_swap
-write Virt Page b in clock_check_swap
-write Virt Page e in clock_check_swap
+write Virt Page b in clock_check_swap                   #a,b,c,d写都能成功
+write Virt Page e in clock_check_swap                   #给0x5000写e失败
 page fault at 0x00005000: K/W [no page found].
-swap_out: i 0, store page in vaddr 0x1000 to disk swap entry 2
+swap_out: i 0, store page in vaddr 0x1000 to disk swap entry 2      #将0x1000置换出去
 write Virt Page b in clock_check_swap
-write Virt Page a in clock_check_swap
+write Virt Page a in clock_check_swap                   #0x1000不在内存页
 page fault at 0x00001000: K/W [no page found].
 swap_out: i 0, store page in vaddr 0x2000 to disk swap entry 3
 swap_in: load disk swap entry 2 with swap_page in vadr 0x1000
@@ -475,5 +494,18 @@ check_swap() succeeded!
     - <a href="#enclock">改进的时钟（Enhanced Clock）页替换算法</a>   
     - <a href="#exclock">识别dirty bit的extended clock页替换算法</a>   
 
+####  虚存中的页与硬盘上的扇区之间的映射关系
+当一个PTE用来描述一般意义上的物理页时，用于维护各种权限和映射关系，以及应该有PTE_P标记；但当它用来描述一个被置换出去的物理页时，它被用来维护该物理页与swap 磁盘上扇区的映射关系，并且该PTE不应该由MMU将它解释成物理页映射(即没有PTE_P标记)，与此同时对应的权限则交由mm_struct来维护，当对位于该页的内存地址进行访问的时候，必然导致page fault，然后ucore能够根据PTE描述的 swap 项将相应的物理页重新建立起来，并根据虚存所描述的权限重新设置好PTE使得内存访问能够继续正常进行。    
+当PTE用于描述被置换出去的物理页时，PTE的最低位--present位应该为0（即PTE_P标记为空，表示虚实地址映射关系不存在），接下来的7位暂时保留，可以用作各种扩展；而包括原来高20位页帧号的高24位数据，恰好可以用来表示此页在硬盘上的起始扇区的位置。为了在页表项中区别0和swap分区的映射，将swap分区的一个page空出来不用，也就是说一个高24位不为0，而最低位为0的PTE表示了一个放在硬盘上的页的起始扇区号（见swap.h中对swap_entry_t的描述）：
+```
+swap_entry_t
+-------------------------
+| offset | reserved | 0 |
+-------------------------
+24 bits    7 bits   1 bit
+```
+硬盘的最小访问单位是一个扇区，而一个扇区的大小为512（2\^8）字节，所以需要8个连续扇区才能放置一个4KB的页。
 
 ### 思考
+课堂上讲了理论，而通过实验学习了具体实现方法和更多细节的东西，加深了对理论知识的掌握。因为我记忆力不要好，所以专门新建一个文档用来记录各种变量的含义，用过能从lab1就开始整理，也许能节省更多时间。这次实验是在对实验原理理解足够充分之后再开始写代码的，因此与之前相比，对代码的理解比一起更充分。  
+困难的地方在于对几个数据结构的理解，我又回过头看了下lab2的page，然后反复琢磨vma，mm结构体。理解这些之后对其余部分的理解就会更快了。
