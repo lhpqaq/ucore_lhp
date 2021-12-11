@@ -144,6 +144,7 @@ page_ref_dec(struct Page *page) {
 
 extern char bootstack[], bootstacktop[];
 
-
+extern void * kmalloc(size_t n);
+extern void kfree(void *ptr, size_t n);
 #endif /* !__KERN_MM_PMM_H__ */
 

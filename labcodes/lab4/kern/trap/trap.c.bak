@@ -252,7 +252,7 @@ trap_dispatch(struct trapframe *tf) {
             tf->tf_cs = KERNEL_CS;
             tf->tf_ds = tf->tf_es = KERNEL_DS;
             tf->tf_eflags &= ~FL_IOPL_MASK;
-        }
+        }        
         break;
     case IRQ_OFFSET + IRQ_IDE1:
     case IRQ_OFFSET + IRQ_IDE2:

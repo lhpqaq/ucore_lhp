@@ -185,8 +185,7 @@ default_free_pages(struct Page *base, size_t n) {
         }
         le = list_next(le);
     }
-    list_add_before(le, &(base->page_link));//将空闲块插找到的位置前面
-}
+    list_add_before(le, &(base->page_link));//将空闲块插找到的位置前面}
 
 static size_t
 default_nr_free_pages(void) {

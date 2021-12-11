@@ -238,19 +238,14 @@ _extend_clock_check_swap(void)
     return 0;
 }
 
-
-
 struct swap_manager swap_manager_fifo =
 {
-    .name = "fifo swap manager",
-    .init = &_fifo_init,
-    .init_mm = &_fifo_init_mm,
-    .tick_event = &_fifo_tick_event,
-    .set_unswappable = &_fifo_set_unswappable,
-    .swap_out_victim = &_fifo_swap_out_victim,
-    .check_swap = &_fifo_check_swap,
-    .map_swappable = &_fifo_map_swappable,
-/*    .map_swappable = &_extend_clock_map_swappable,
-    .swap_out_victim = &_extend_clock_swap_out_victim,
-    .check_swap = &_extend_clock_check_swap,    */ 
+     .name            = "fifo swap manager",
+     .init            = &_fifo_init,
+     .init_mm         = &_fifo_init_mm,
+     .tick_event      = &_fifo_tick_event,
+     .map_swappable   = &_fifo_map_swappable,
+     .set_unswappable = &_fifo_set_unswappable,
+     .swap_out_victim = &_fifo_swap_out_victim,
+     .check_swap      = &_fifo_check_swap,
 };

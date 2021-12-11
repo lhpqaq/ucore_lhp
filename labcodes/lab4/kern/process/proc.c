@@ -85,7 +85,19 @@ void switch_to(struct context *from, struct context *to);
 static struct proc_struct *
 alloc_proc(void) {
     struct proc_struct *proc = kmalloc(sizeof(struct proc_struct));
-    if (proc != NULL) {
+    if(proc != NULL) {
+        proc->state = PROC_UNINIT; //进程为初始化状态
+        proc->pid = -1;            //进程PID为-1
+        proc->runs = 0;            //初始化时间片
+        proc->kstack = 0;          //内核栈地址
+        proc->need_resched = 0;    //不需要调度
+        proc->parent = NULL;       //父进程为空
+        proc->mm = NULL;           //虚拟内存为空
+        memset(&(proc->context), 0, sizeof(struct context)); //初始化上下文
+        proc->tf = NULL;           //中断帧指针为空
+        proc->cr3 = boot_cr3;      //页目录为内核页目录表的基址
+        proc->flags = 0;           //标志位为0
+        memset(proc->name, 0, PROC_NAME_LEN);//进程名为0
     //LAB4:EXERCISE1 YOUR CODE
     /*
      * below fields in proc_struct need to be initialized
@@ -296,6 +308,34 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     //    5. insert proc_struct into hash_list && proc_list
     //    6. call wakeup_proc to make the new child process RUNNABLE
     //    7. set ret vaule using child proc's pid
+        //调用alloc_proc，首先获得一块用户信息块。
+    if ((proc = alloc_proc()) == NULL)
+        goto fork_out;
+    //设置子进程的父进程
+    proc->parent = current;
+    //为进程分配一个内核栈。
+    if (setup_kstack(proc) != 0)
+        goto bad_fork_cleanup_proc;
+    //复制原进程的内存管理信息到新进程
+    if (copy_mm(clone_flags, proc) != 0)
+        goto bad_fork_cleanup_kstack;
+    //复制原进程上下文到新进程
+    copy_thread(proc, stack, tf);
+
+    //将新进程添加到进程列表
+    bool lock;//类似锁，指是否允许中断，即接下来不允许中断切换进程
+    local_intr_save(lock);
+    {
+        proc->pid = get_pid();
+        hash_proc(proc);
+        list_add(&proc_list, &(proc->list_link));
+        nr_process ++;
+    }
+    local_intr_restore(lock);
+    //唤醒新进程
+    wakeup_proc(proc);
+    //返回新进程号
+    ret = proc->pid;
 fork_out:
     return ret;
 
