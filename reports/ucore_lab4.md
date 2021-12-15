@@ -389,11 +389,17 @@ lcr3(uintptr_t cr3) {
     ```
     cli(Clear Interrupt)为中断标志置0指令使IF=0，也就是关闭中断。通过sti(Set Interrupt)中断标志置1指令使IF=1，恢复中断。
 
+__实验结果__   
+<div align="center">
+<img src="https://i.bmp.ovh/imgs/2021/12/136238a1f8cda3ea.png" alt="grade" width="500"/>
+<img src="https://i.bmp.ovh/imgs/2021/12/9832963c2ca0c60a.png" alt="grade" width="500"/>
+</div>
+
 ## 总结
 
 ### 知识点
 
-
+部分知识点已在练习中给出下面补充一些实验中困扰我但练习没有提到的知识。  
 #### 内核线程
 内核线程是一种只运行在内核地址空间的线程。所有的内核线程共享内核地址空间，所以也共享同一份内核页表。**这也是为什么叫内核线程，而不叫*内核进程*的原因。** 
 
