@@ -375,31 +375,6 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
     }
     return NULL;          // (8) return page table entry
 #endif
-    //获取页目录的物理地址
-    pde_t *pdep = &pgdir[PDX(la)];
-    //如果该条目不可用(not present)
-    if (!(*pdep & PTE_P)) 
-    {
-        struct Page *page;
-        //如果分配页面失败，或者不允许分配
-        if (!create || (page = alloc_page()) == NULL)
-            return NULL;
-        //设置该物理页面的引用次数为1
-        set_page_ref(page, 1);
-        //获取当前物理页面所管理的物理地址
-        uintptr_t pa = page2pa(page);
-        //清空该物理页面的数据。需要注意的是使用虚拟地址
-        memset(KADDR(pa), 0, PGSIZE);
-        //将新分配的页面设置为当前缺失的页目录条目中
-        *pdep = pa | PTE_U | PTE_W | PTE_P;
-        /*
-         *   PTE_P           0x001              // page table/directory entry flags bit : Present
-         *   PTE_W           0x002              // page table/directory entry flags bit : Writeable
-         *   PTE_U           0x004              // page table/directory entry flags bit : User can access
-         */
-    }
-    //返回二级页表项
-    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
