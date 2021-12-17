@@ -61,11 +61,13 @@ idt_init(void) {
     extern uintptr_t __vectors[];
     int i;
     for (i = 0; i < sizeof(idt) / sizeof(struct gatedesc); i ++)
+    {
+    	SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
+    }
       // 目标idt项为idt[i]
       // 该idt项为内核代码，所以使用GD_KTEXT段选择子
       // 中断处理程序的入口地址存放于__vectors[i]
       // 特权级为DPL_KERNEL
-      SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
     // 设置从用户态转为内核态的中断的特权级为DPL_USER
     //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
     SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);

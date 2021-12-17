@@ -715,6 +715,8 @@ check_boot_pgdir(void) {
     free_page(pde2page(boot_pgdir[0]));
     boot_pgdir[0] = 0;
 
+    tlb_invalidate(boot_pgdir, 0x100);
+    tlb_invalidate(boot_pgdir, 0x100+PGSIZE);
     cprintf("check_boot_pgdir() succeeded!\n");
 }
 
