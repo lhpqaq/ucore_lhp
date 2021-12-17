@@ -116,7 +116,7 @@ default_init_memmap(struct Page *base, size_t n) {
     base->property = n;
     SetPageProperty(base);
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    list_add_before(&free_list, &(base->page_link));//插入到链表前面
 }
 
 static struct Page *
@@ -135,13 +135,13 @@ default_alloc_pages(size_t n) {
         }
     }
     if (page != NULL) {
-        list_del(&(page->page_link));
         if (page->property > n) {
             struct Page *p = page + n;
             p->property = page->property - n;
-            list_add(&free_list, &(p->page_link));
-    }
-        nr_free -= n;
+            SetPageProperty(p);//设置flags
+            list_add_before(&(page->page_link), &(p->page_link));//插入到原节点的前面
+        }
+        list_del(&(page->page_link));//移除分配的节点        nr_free -= n;
         ClearPageProperty(page);
     }
     return page;
@@ -175,7 +175,16 @@ default_free_pages(struct Page *base, size_t n) {
         }
     }
     nr_free += n;
-    list_add(&free_list, &(base->page_link));
+    le = list_next(&free_list);
+    // 遍历找到插入的位置
+    while (le != &free_list) {
+        p = le2page(le, page_link);
+        if (base + base->property <= p) {
+            break;
+        }
+        le = list_next(le);
+    }
+    list_add_before(le, &(base->page_link));//将空闲块插找到的位置前面
 }
 
 static size_t

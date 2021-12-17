@@ -67,7 +67,8 @@ idt_init(void) {
       // 特权级为DPL_KERNEL
       SETGATE(idt[i], 0, GD_KTEXT, __vectors[i], DPL_KERNEL);
     // 设置从用户态转为内核态的中断的特权级为DPL_USER
-    SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    //SETGATE(idt[T_SWITCH_TOK], 0, GD_KTEXT, __vectors[T_SWITCH_TOK], DPL_USER);
+    SETGATE(idt[T_SYSCALL], 0, GD_KTEXT, __vectors[T_SYSCALL], DPL_USER);
     // 加载该IDT
     lidt(&idt_pd);
 }
@@ -223,6 +224,13 @@ trap_dispatch(struct trapframe *tf) {
         syscall();
         break;
     case IRQ_OFFSET + IRQ_TIMER:
+        ticks++;
+        if(ticks % TICK_NUM == 0){
+            // Lab5 Code
+            assert(current != NULL);
+            current->need_resched = 1;
+            //print_ticks();
+        }
 #if 0
     LAB3 : If some page replacement algorithm(such as CLOCK PRA) need tick to change the priority of pages,
     then you can add code here. 

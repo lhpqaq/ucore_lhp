@@ -99,6 +99,8 @@ alloc_proc(void) {
         proc->cr3 = boot_cr3;      //页目录为内核页目录表的基址
         proc->flags = 0;           //标志位为0
         memset(proc->name, 0, PROC_NAME_LEN);//进程名为0
+        proc->wait_state = 0;
+        proc->cptr = proc->optr = proc->yptr = NULL;
     //LAB4:EXERCISE1 YOUR CODE
     /*
      * below fields in proc_struct need to be initialized
@@ -420,6 +422,7 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
         goto fork_out;
     //设置子进程的父进程
     proc->parent = current;
+    assert(current->wait_state == 0);//确保当前进程正在等待
     //为进程分配一个内核栈。
     if (setup_kstack(proc) != 0)
         goto bad_fork_cleanup_proc;
@@ -433,10 +436,9 @@ do_fork(uint32_t clone_flags, uintptr_t stack, struct trapframe *tf) {
     bool lock;//类似锁，指是否允许中断，即接下来不允许中断切换进程
     local_intr_save(lock);
     {
-        proc->pid = get_pid();
+        proc->pid = get_pid();//获取当前进程 PID
         hash_proc(proc);
-        list_add(&proc_list, &(proc->list_link));
-        nr_process ++;
+        set_links(proc);//设置进程的相关链接
     }
     local_intr_restore(lock);
     //唤醒新进程
@@ -641,6 +643,11 @@ load_icode(unsigned char *binary, size_t size) {
      *          tf_eip should be the entry point of this binary program (elf->e_entry)
      *          tf_eflags should be set to enable computer to produce Interrupt
      */
+    tf->tf_cs = USER_CS;   //将段寄存器初始化为用户态的代码段、数据段、堆栈段；
+    tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+    tf->tf_esp = USTACKTOP; //esp指向先前的步骤中创建的用户栈的栈顶；
+    tf->tf_eip = elf->e_entry;//eip指向ELF可执行文件加载到内存之后的入口处；
+    tf->tf_eflags = FL_IF; //FL_IF为中断打开状态
     ret = 0;
 out:
     return ret;
