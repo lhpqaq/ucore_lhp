@@ -201,7 +201,7 @@ dup_mmap(struct mm_struct *to, struct mm_struct *from) {
 
         insert_vma_struct(to, nvma);
 
-        bool share = 0;
+        bool share = 1;
         if (copy_range(to->pgdir, from->pgdir, vma->vm_start, vma->vm_end, share) != 0) {
             return -E_NO_MEM;
         }
@@ -505,6 +505,14 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
             cprintf("pgdir_alloc_page in do_pgfault failed\n");
             goto failed;
         }
+    }
+    else if (error_code & 3 == 3) { // copy on write
+        cprintf("test cow write\n");
+        struct Page *page = pte2page(*ptep);
+        struct Page *npage = pgdir_alloc_page(mm->pgdir, addr, perm);
+        uintptr_t src_kvaddr = page2kva(page);
+        uintptr_t dst_kvaddr = page2kva(npage);
+        memcpy(dst_kvaddr, src_kvaddr, PGSIZE);
     }
     else {
         struct Page *page=NULL;
