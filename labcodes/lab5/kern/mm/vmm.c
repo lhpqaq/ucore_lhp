@@ -201,7 +201,7 @@ dup_mmap(struct mm_struct *to, struct mm_struct *from) {
 
         insert_vma_struct(to, nvma);
 
-        bool share = 1;
+        bool share = 1;  //COW开关
         if (copy_range(to->pgdir, from->pgdir, vma->vm_start, vma->vm_end, share) != 0) {
             return -E_NO_MEM;
         }
@@ -507,7 +507,7 @@ do_pgfault(struct mm_struct *mm, uint32_t error_code, uintptr_t addr) {
         }
     }
     else if (error_code & 3 == 3) { // copy on write
-        cprintf("test cow write\n");
+        cprintf("test cow write\n");//用于测试
         struct Page *page = pte2page(*ptep);
         struct Page *npage = pgdir_alloc_page(mm->pgdir, addr, perm);
         uintptr_t src_kvaddr = page2kva(page);

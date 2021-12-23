@@ -222,8 +222,8 @@ load_icode函数说明为：
      *          tf_eip should be the entry point of this binary program (elf->e_entry)
      *          tf_eflags should be set to enable computer to produce Interrupt
      */
-    tf->tf_cs = USER_CS;   //将段寄存器初始化为用户态的代码段、数据段、堆栈段；
-    tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;
+    tf->tf_cs = USER_CS;   //将段寄存器初始化为用户态的代码段；
+    tf->tf_ds = tf->tf_es = tf->tf_ss = USER_DS;//数据段、附加段、堆栈段
     tf->tf_esp = USTACKTOP; //esp指向先前的步骤中创建的用户栈的栈顶；
     tf->tf_eip = elf->e_entry;//eip指向ELF可执行文件加载到内存之后的入口处；
     tf->tf_eflags = FL_IF; //FL_IF为中断打开状态
@@ -565,6 +565,7 @@ int do_exit(int error_code) {
 ```
 COW机制的开关在dup_mmap中，即bool变量：
 ```C
+//vmm.c  line204
 int dup_mmap(struct mm_struct *to, struct mm_struct *from) {
     ...
         bool share = 1;//1时使用cow机制
