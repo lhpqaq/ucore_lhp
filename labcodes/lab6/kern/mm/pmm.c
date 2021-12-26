@@ -375,6 +375,18 @@ get_pte(pde_t *pgdir, uintptr_t la, bool create) {
     }
     return NULL;          // (8) return page table entry
 #endif
+    pde_t *pdep = &pgdir[PDX(la)];
+    if (!(*pdep & PTE_P)) {
+        struct Page *page;
+        if (!create || (page = alloc_page()) == NULL) {
+            return NULL;
+        }
+        set_page_ref(page, 1);
+        uintptr_t pa = page2pa(page);
+        memset(KADDR(pa), 0, PGSIZE);
+        *pdep = pa | PTE_U | PTE_W | PTE_P;
+    }
+    return &((pte_t *)KADDR(PDE_ADDR(*pdep)))[PTX(la)];
 }
 
 //get_page - get related Page struct for linear address la using PDT pgdir
@@ -420,6 +432,14 @@ page_remove_pte(pde_t *pgdir, uintptr_t la, pte_t *ptep) {
                                   //(6) flush tlb
     }
 #endif
+    if (*ptep & PTE_P) {
+        struct Page *page = pte2page(*ptep);
+        if (page_ref_dec(page) == 0) {
+            free_page(page);
+        }
+        *ptep = 0;
+        tlb_invalidate(pgdir, la);
+    }
 }
 
 void
@@ -483,9 +503,9 @@ copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
         //get page from ptep
         struct Page *page = pte2page(*ptep);
         // alloc a page for process B
-        struct Page *npage=alloc_page();
+        //struct Page *npage=alloc_page();
         assert(page!=NULL);
-        assert(npage!=NULL);
+        //assert(npage!=NULL);
         int ret=0;
         /* LAB5:EXERCISE2 YOUR CODE
          * replicate content of page to npage, build the map of phy addr of nage with the linear addr start
@@ -501,8 +521,26 @@ copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
          * (3) memory copy from src_kvaddr to dst_kvaddr, size is PGSIZE
          * (4) build the map of phy addr of  nage with the linear addr start
          */
-        assert(ret == 0);
+        if(share)
+        {
+            // 物理页面共享，并设置两个PTE上的标志位为只读
+            cprintf("test cow\n");//用于测试
+            page_insert(from, page, start, perm & ~PTE_W);
+            ret = page_insert(to, page, start, perm & ~PTE_W);
         }
+        // 完整拷贝内存
+        else
+        {
+            // alloc a page for process B
+            struct Page *npage=alloc_page();
+            assert(npage!=NULL);           
+            void * kva_src = page2kva(page); // 找到父进程需要复制的物理页在内核地址空间中的虚拟地址，这是由于这个函数执行的时候使用的时内核的地址空间
+            void * kva_dst = page2kva(npage); // 找到子进程需要被填充的物理页的内核虚拟地址    
+            memcpy(kva_dst, kva_src, PGSIZE); // 将父进程的物理页的内容复制到子进程中去
+            ret = page_insert(to, npage, start, perm); // 建立子进程的物理页与虚拟页的映射关系
+		}
+		assert(ret == 0);
+		}
         start += PGSIZE;
     } while (start != 0 && start < end);
     return 0;
@@ -671,6 +709,8 @@ check_boot_pgdir(void) {
     free_page(pde2page(boot_pgdir[0]));
     boot_pgdir[0] = 0;
 
+    tlb_invalidate(boot_pgdir, 0x100);
+    tlb_invalidate(boot_pgdir, 0x100+PGSIZE);
     cprintf("check_boot_pgdir() succeeded!\n");
 }
 

@@ -556,9 +556,9 @@ copy_range(pde_t *to, pde_t *from, uintptr_t start, uintptr_t end, bool share) {
             void * kva_dst = page2kva(npage); // 找到子进程需要被填充的物理页的内核虚拟地址    
             memcpy(kva_dst, kva_src, PGSIZE); // 将父进程的物理页的内容复制到子进程中去
             ret = page_insert(to, npage, start, perm); // 建立子进程的物理页与虚拟页的映射关系
-        }
-        assert(ret == 0);
-        }
+		}
+		assert(ret == 0);
+		}
         start += PGSIZE;
     } while (start != 0 && start < end);
     return 0;
