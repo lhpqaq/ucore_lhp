@@ -5,6 +5,8 @@
 #include <stdio.h>
 #include <assert.h>
 #include <default_sched.h>
+#include <multi_sched.h>
+#include <fair_sched.h>
 
 // the list of timer
 static list_entry_t timer_list;
@@ -47,6 +49,8 @@ sched_init(void) {
     list_init(&timer_list);
 
     sched_class = &default_sched_class;
+    //sched_class = &multi_sched_class;
+    //sched_class = &fair_sched_class;
 
     rq = &__rq;
     rq->max_time_slice = MAX_TIME_SLICE;

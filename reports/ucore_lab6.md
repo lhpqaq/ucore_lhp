@@ -4,7 +4,8 @@
 - [练习0](#练习0)
 - [练习1](#练习1)  
 - [练习2](#练习2)   
-- [扩展练习](#扩展练习) 
+- [扩展练习1](#扩展练习1) 
+- [扩展练习2](#扩展练习2)  
 - [总结](#总结)
     - [知识点](#知识点)
     - [思考](#思考)
@@ -178,6 +179,69 @@ __思考题2__
 
 至此完成了多级反馈队列调度算法的具体设计；
 
+#### 算法实现
+
+###### multi_init
+
+需要初始化每一个级别的队列。
+
+```c
+static void multi_init(struct run_queue *rq) {
+    for (int i = 0; i < MULTI_QUEUE_NUM; i++)
+        list_init(&(rq->multi_run_list[i]));
+    rq->proc_num = 0;
+}
+```
+
+###### multi_enqueue
+
+- 如果进程上一个时间片用完了，考虑增加level（降低优先级）；
+- 加入level对应的队列；
+- 设置level对应的时间片；
+- 增加计数值。
+
+```c
+static void multi_enqueue(struct run_queue *rq, struct proc_struct *proc) {
+    int level = proc->multi_level;
+    if (proc->time_slice == 0 && level < (MULTI_QUEUE_NUM-1))
+        level ++;
+    proc->multi_level = level;
+    list_add_before(&(rq->multi_run_list[level]), &(proc->run_link));
+    if (proc->time_slice == 0 || proc->time_slice > (rq->max_time_slice << level))
+        proc->time_slice = (rq->max_time_slice << level);
+    proc->rq = rq;
+    rq->proc_num ++;
+}
+```
+
+###### multi_dequeue
+
+将进程从对应的链表删除。
+
+```c
+static void multi_dequeue(struct run_queue *rq, struct proc_struct *proc) {
+    list_del_init(&(proc->run_link));
+    rq->proc_num --;
+}
+```
+
+###### multi_pick_next
+
+按照优先级顺序检查每个队列，如果队列存在进程，那么选择这个进程。
+
+```c
+static struct proc_struct *multi_pick_next(struct run_queue *rq) {
+    for (int i = 0; i < MULTI_QUEUE_NUM; i++)
+        if (!list_empty(&(rq->multi_run_list[i])))
+            return le2proc(list_next(&(rq->multi_run_list[i])), run_link);
+    return NULL;
+}
+```
+
+multi_proc_tick
+
+这和RR算法是一样的。
+
 ## 练习2
 ### 实现Stride Scheduling调度算法（需要编码）
 首先需要换掉RR调度器的实现，即用default_sched_stride_c覆盖default_sched.c。然后根据此文件和后续文档对Stride度器的相关描述，完成Stride调度算法的实现。  
@@ -348,8 +412,13 @@ Stride 调度算法的思路是每次找 stride 步进值最小的进程，每�
 
 
 
-## 扩展练习
+## 扩展练习1
 ### 实现 Linux 的 CFS 调度算法
+
+cfs定义一种新的模型，它给cfs_rq（cfs的run_queue）中的每一个进程安排一个虚拟时钟vruntime。如果一个进程得以执行，随着时间的增长（即一个个tick的到来），其vruntime将不断增大。没有得到执行的进程vruntime不变。  
+调度器总是选择vruntime值最低的进程执行。这就是所谓的“完全公平”。对于不同进程，优先级高的进程vruntime增长慢，以至于它能得到更多的运行时间。  
+
+__vruntime = 实际运行时间 * 1024 / 进程权重__   
 
 CFS 算法的基本思路就是尽量使得每个进程的运行时间相同，所以需要记录每个进程已经运行的时间：
 
@@ -396,7 +465,7 @@ struct proc_struct {
 
 首先需要一个比较函数，同样根据 ![](http://latex.codecogs.com/gif.latex?MAX_RUNTIME-MIN_RUNTIE<MAX_PRIORITY) 完全不需要考虑虚拟运行时溢出的问题。
 
-```
+```c
 static int proc_fair_comp_f(void *a, void *b)
 {
      struct proc_struct *p = le2proc(a, fair_run_pool);
@@ -408,7 +477,7 @@ static int proc_fair_comp_f(void *a, void *b)
 }
 ```
 
-###### fair_init
+fair_init
 
 ```c
 static void fair_init(struct run_queue *rq) {
@@ -417,10 +486,9 @@ static void fair_init(struct run_queue *rq) {
 }
 ```
 
-###### fair_enqueue
+fair_enqueue  
 
 和 Stride Scheduling 类型，但是不需要更新 stride。
-
 ```c
 static void fair_enqueue(struct run_queue *rq, struct proc_struct *proc) {
     rq->fair_run_pool = skew_heap_insert(rq->fair_run_pool, &(proc->fair_run_pool), proc_fair_comp_f);
@@ -431,7 +499,7 @@ static void fair_enqueue(struct run_queue *rq, struct proc_struct *proc) {
 }
 ```
 
-###### fair_dequeue
+fair_dequeue
 
 ```c
 static void fair_dequeue(struct run_queue *rq, struct proc_struct *proc) {
@@ -440,7 +508,7 @@ static void fair_dequeue(struct run_queue *rq, struct proc_struct *proc) {
 }
 ```
 
-###### fair_pick_next
+fair_pick_next
 
 ```c
 static struct proc_struct * fair_pick_next(struct run_queue *rq) {
@@ -452,7 +520,7 @@ static struct proc_struct * fair_pick_next(struct run_queue *rq) {
 }
 ```
 
-###### fair_proc_tick
+fair_proc_tick  
 
 需要更新虚拟运行时，增加的量为优先级系数。
 
@@ -469,7 +537,6 @@ fair_proc_tick(struct run_queue *rq, struct proc_struct *proc) {
 }
 ```
 
-##### 兼容调整
 
 为了保证测试可以通过，需要将 Stride Scheduling 的优先级对应到 CFS 的优先级：
 
@@ -495,19 +562,12 @@ int do_yield(void) {
 }
 ```
 
-> 遇到的问题：**为什么 CFS 调度算法使用红黑树而不使用堆来获取最小运行时进程？**
->
-> 查阅了网上的资料以及自己分析，得到如下结论：
->
-> - 堆基于数组，但是对于调度器来说进程数量不确定，无法使用定长数组实现的堆；
-> - ucore 中的 Stride Scheduling 调度算法使用了斜堆，但是斜堆没有维护平衡的要求，可能导致斜堆退化成为有序链表，影响性能。
->
-> 综上所示，红黑树因为平衡性以及非连续所以是CFS算法最佳选择。
+> 堆基于数组，但是对于调度器来说进程数量不确定，无法使用定长数组实现的堆；
 
-- 堆基于数组，但是对于调度器来说进程数量不确定，无法使用定长数组实现的堆；
-- ucore 中的 Stride Scheduling 调度算法使用了斜堆，但是斜堆没有维护平衡的要求，可能导致斜堆退化成为有序链表，影响性能。
 
-综上所示，红黑树因为平衡性以及非连续所以是CFS算法最佳选择。
+### 扩展练习2
+#### 在ucore上实现尽可能多的各种基本调度算法
+多级反馈队列调度算法，见练习1
 
 ## 总结
 
