@@ -179,16 +179,23 @@ void phi_test_condvar (i) {
 
 
 void phi_take_forks_condvar(int i) {
-     down(&(mtp->mutex));
+    down(&(mtp->mutex));
 //--------into routine in monitor--------------
-     // LAB7 EXERCISE1: YOUR CODE
-     // I am hungry
-     // try to get fork
+    // LAB7 EXERCISE1: YOUR CODE
+    // I am hungry
+    // try to get fork
+    state_condvar[i]=HUNGRY; //饥饿状态
+    phi_test_condvar(i);  //尝试拿到刀叉，若不能拿，则阻塞自己，等其它进程唤醒
+    if (state_condvar[i] != EATING) 
+    {   //没拿到，需要等待，调用 wait 函数
+        cprintf("phi_take_forks_condvar: %d didn't get fork and will wait\n",i);
+        cond_wait(&mtp->cv[i]);
+    }
 //--------leave routine in monitor--------------
-      if(mtp->next_count>0)
-         up(&(mtp->next));
-      else
-         up(&(mtp->mutex));
+    if(mtp->next_count>0)
+     up(&(mtp->next));
+    else
+     up(&(mtp->mutex));
 }
 
 void phi_put_forks_condvar(int i) {
@@ -198,6 +205,9 @@ void phi_put_forks_condvar(int i) {
      // LAB7 EXERCISE1: YOUR CODE
      // I ate over
      // test left and right neighbors
+     state_condvar[i]=THINKING; // 哲学家进餐结束
+     phi_test_condvar(LEFT); // 看一下左邻居现在是否能进餐
+     phi_test_condvar(RIGHT); // 看一下右邻居现在是否能进餐
 //--------leave routine in monitor--------------
      if(mtp->next_count>0)
         up(&(mtp->next));

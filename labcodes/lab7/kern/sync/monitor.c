@@ -37,6 +37,12 @@ cond_signal (condvar_t *cvp) {
    *          }
    *       }
    */
+    if(cvp->count>0) {
+       cvp->owner->next_count ++;  //管程中睡眠的数量
+       up(&(cvp->sem));            //唤醒在条件变量里睡眠的进程
+       down(&(cvp->owner->next));  //将在管程中的进程睡眠
+       cvp->owner->next_count --;
+   }
    cprintf("cond_signal end: cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);
 }
 
@@ -55,5 +61,12 @@ cond_wait (condvar_t *cvp) {
     *         wait(cv.sem);
     *         cv.count --;
     */
+    cvp->count++;                  //条件变量中睡眠的进程数量加 1
+    if(cvp->owner->next_count > 0)
+       up(&(cvp->owner->next));//如果当前有进程正在等待，且睡在宿主管程的信号量上，此时需要唤醒
+    else
+       up(&(cvp->owner->mutex));//如果没有进程睡眠，那么当前进程无法进入管程的原因就是互斥条件的限制。因此唤醒mutex互斥锁，代表现在互斥锁被占用。
+    down(&(cvp->sem));//自己睡眠
+    cvp->count --;
     cprintf("cond_wait end:  cvp %x, cvp->count %d, cvp->owner->next_count %d\n", cvp, cvp->count, cvp->owner->next_count);
 }
